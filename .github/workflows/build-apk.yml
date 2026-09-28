@@ -26,12 +26,21 @@ jobs:
       # NB: sengaja gak pakai action `android-actions/setup-android@v3` — action itu
       # nyoba install package legacy "tools" yang udah gak ada di cmdline-tools versi baru,
       # bikin exit code 1 ("Failed to find package 'tools'"). Runner ubuntu-latest GitHub
-      # udah dateng dengan Android SDK + sdkmanager preinstall (ANDROID_HOME kesetting
-      # otomatis), jadi cukup langsung pakai sdkmanager buat nambah platform 29.
+      # udah dateng dengan Android SDK + sdkmanager preinstall di $ANDROID_HOME, TAPI folder
+      # cmdline-tools/<versi>/bin nya gak otomatis masuk PATH — makanya perlu dicari manual.
       - name: Install SDK platform 29 + build-tools
         run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER_BIN=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 2 -name sdkmanager | sort -V | tail -1)
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            echo "sdkmanager gak ketemu di $SDK_ROOT/cmdline-tools — cek isi:"; find "$SDK_ROOT" -maxdepth 3
+            exit 1
+          fi
+          export PATH="$(dirname "$SDKMANAGER_BIN"):$PATH"
+          echo "pakai sdkmanager di: $SDKMANAGER_BIN"
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platforms;android-29" "build-tools;29.0.3"
+          echo "$(dirname "$SDKMANAGER_BIN")" >> "$GITHUB_PATH"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
