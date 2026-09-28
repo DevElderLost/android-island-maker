@@ -1,0 +1,27 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.megernolep.islandeditor'
+    compileSdk 29
+
+    defaultConfig {
+        applicationId "com.megernolep.islandeditor"
+        minSdkVersion 29
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            // Debug-signed pakai keystore bawaan Android SDK di runner CI —
+            // cukup buat sideload manual, gak perlu setup signing key sendiri.
+            // Ganti ke release+signingConfig kalau mau publish beneran.
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
