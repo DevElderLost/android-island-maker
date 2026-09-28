@@ -1,0 +1,50 @@
+name: Build Island Editor APK
+
+# Build APK offline-editor Island Editor buat Android 10 (API 29).
+# Gak butuh gradlew/gradle-wrapper.jar dikomit ke repo — Gradle-nya
+# disediain sama gradle/actions/setup-gradle di runner.
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - "app/**"
+      - "build.gradle"
+      - "settings.gradle"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK platform 29 + build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-29" "build-tools;29.0.3"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.4"
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: island-editor-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+# Cara install: download artifact di atas, sideload ke HP (aktifin "Install dari
+# sumber tidak dikenal" buat file manager/browser kamu). APK ini debug-signed
+# (keystore bawaan Android SDK di runner) — cukup buat pemakaian sendiri,
+# TIDAK cocok buat publish ke Play Store.
