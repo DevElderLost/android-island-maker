@@ -1,1 +1,306 @@
-a
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Island Editor</title>
+<style>
+:root{
+  --ink:#1b1712; --paper:#e9dcc0; --paper2:#d8c69e; --line:#8a7550;
+  --accent:#7a3b2e; --accent2:#3b5a3f; --panel:#2a241c; --panel2:#332c22;
+  --text:#eee3c8; --muted:#a6987a;
+  padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){ --panel:#2a241c; --panel2:#332c22; } }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--panel);color:var(--text);font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+button,select,input{font-family:inherit;font-size:13px}
+#app{display:flex;flex-direction:column;height:100%}
+header{padding:8px 12px;background:var(--panel2);border-bottom:1px solid #000;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+header h1{font-size:14px;margin:0;color:var(--paper);font-weight:600;letter-spacing:.02em}
+header label{font-size:11px;color:var(--muted);display:flex;gap:4px;align-items:center}
+header input[type=text],header input[type=number]{width:110px;background:#1c1712;color:var(--text);border:1px solid var(--line);border-radius:3px;padding:3px 5px}
+main{flex:1;display:flex;min-height:0}
+#sidebar{width:190px;background:var(--panel2);border-right:1px solid #000;padding:10px;overflow-y:auto;flex-shrink:0}
+#sidebar h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:14px 0 6px}
+#sidebar h2:first-child{margin-top:0}
+.tool-btn{display:block;width:100%;text-align:left;padding:6px 8px;margin-bottom:3px;background:#1c1712;border:1px solid var(--line);color:var(--text);border-radius:3px;cursor:pointer}
+.tool-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.swatch-row{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:8px}
+.swatch{height:26px;border-radius:3px;border:2px solid transparent;cursor:pointer}
+.swatch.active{border-color:#fff}
+.flagrow{display:flex;gap:8px;font-size:11px;margin-bottom:8px;color:var(--muted)}
+#canvasWrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;background:#141019;position:relative}
+canvas{image-rendering:pixelated;cursor:crosshair;touch-action:none}
+#legend{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);padding:6px 8px;border-radius:4px;font-size:10px;color:var(--muted);line-height:1.6}
+footer{padding:6px 12px;background:var(--panel2);border-top:1px solid #000;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{background:#1c1712;border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:3px;cursor:pointer}
+.btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
+#status{font-size:11px;color:var(--muted);margin-left:auto}
+select{background:#1c1712;color:var(--text);border:1px solid var(--line);border-radius:3px;padding:3px}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>ISLAND EDITOR</h1>
+  <label>id <input id="templateId" type="text" value="ri20te_gen02"></label>
+  <label>level <input id="level" type="number" value="20" style="width:56px"></label>
+  <label>role
+    <select id="role"><option value="4">4 Risky</option><option value="9">9 Personal</option></select>
+  </label>
+  <label>ukuran <span id="dims">256x256</span></label>
+</header>
+<main>
+  <div id="sidebar">
+    <h2>Mode</h2>
+    <button class="tool-btn active" data-mode="biome">🎨 Biome</button>
+    <button class="tool-btn" data-mode="natural">🌳 Natural (pohon/batu)</button>
+    <button class="tool-btn" data-mode="landmark">🗿 Landmark</button>
+    <button class="tool-btn" data-mode="port">⚓ Dermaga (entry)</button>
+    <button class="tool-btn" data-mode="herd">🐾 Herd (hewan)</button>
+
+    <div id="panel-biome">
+      <h2>Biome</h2>
+      <div class="swatch-row" id="biomeSwatches"></div>
+      <div class="flagrow">
+        <label><input type="checkbox" id="fCollidable"> collidable</label>
+        <label><input type="checkbox" id="fNotPlant"> no-plant</label>
+      </div>
+      <h2>Brush</h2>
+      <select id="brushSize"><option value="1">1 tile</option><option value="3" selected>3 tile</option><option value="7">7 tile</option><option value="15">15 tile</option></select>
+    </div>
+
+    <div id="panel-natural" style="display:none">
+      <h2>Kategori</h2>
+      <div class="swatch-row" id="naturalSwatches"></div>
+      <h2>Spray</h2>
+      <select id="sprayDensity"><option value="8">jarang</option><option value="3" selected>sedang</option><option value="1">rimbun</option></select>
+    </div>
+
+    <div id="panel-landmark" style="display:none">
+      <h2>Landmark id</h2>
+      <input id="landmarkId" type="text" value="1" style="width:100%;background:#1c1712;color:var(--text);border:1px solid var(--line);border-radius:3px;padding:4px">
+      <p style="font-size:10px;color:var(--muted)">Nomor id prefab landmark asli (cek TerrainMeta / data kamu). Klik peta buat naruh, shift+klik buat hapus terdekat.</p>
+    </div>
+
+    <div id="panel-port" style="display:none">
+      <p style="font-size:11px;color:var(--muted)">Klik buat naruh titik dermaga (entry point + port_point). Biasanya cukup 1 per pulau. Shift+klik hapus.</p>
+    </div>
+
+    <div id="panel-herd" style="display:none">
+      <h2>Grup</h2>
+      <select id="herdGroup">
+        <option>land</option><option>beach</option><option>lake_shallow</option><option>lake_deep</option><option>ocean</option>
+      </select>
+      <h2>Entity type id</h2>
+      <input id="herdEntity" type="text" value="203720" style="width:100%;background:#1c1712;color:var(--text);border:1px solid var(--line);border-radius:3px;padding:4px">
+      <p style="font-size:10px;color:var(--muted)">Cek entity_types/animal.json buat id hewan. Klik = naruh 1 titik herd. Shift+klik hapus terdekat.</p>
+    </div>
+
+    <h2>File</h2>
+    <button class="btn" id="importBtn" style="width:100%;margin-bottom:6px">Import spec .json</button>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+  </div>
+  <div id="canvasWrap">
+    <canvas id="mapCanvas" width="512" height="512"></canvas>
+    <div id="legend"></div>
+  </div>
+</main>
+<footer>
+  <button class="btn" id="clearBtn">Clear semua</button>
+  <button class="btn primary" id="exportBtn">Export spec.json</button>
+  <span id="status">0 natural · 0 landmark · 0 dermaga · 0 herd</span>
+</footer>
+</div>
+<script>
+const W=256,H=256,SCALE=2; // canvas 512x512 tampil, 1 data-tile = 2x2 px layar
+const BASE_COLORS={0:[34,120,60],1:[20,140,40],2:[210,180,100],3:[170,190,200],4:[235,235,245],
+  5:[190,170,90],6:[90,100,60],7:[120,40,30],9:[180,170,150],10:[225,210,160],
+  11:[90,140,190],12:[40,100,170],13:[60,130,200],14:[70,150,210],15:[200,60,20]};
+function variantColor(base,collidable,notPlant){let[r,g,b]=base;
+  if(collidable){r=Math.min(255,r+40);g=Math.max(0,g-20);b=Math.max(0,b-20);}
+  if(notPlant){r=Math.max(0,r-30);g=Math.max(0,g-30);b=Math.max(0,b-30);}
+  return[r,g,b];}
+const NATURAL_CATS=[
+  {key:'tree',label:'Pohon',id:14051,color:'#1c6b1c'},
+  {key:'bush',label:'Semak',id:16100,color:'#4c8a3a'},
+  {key:'stone',label:'Batu',id:16105,color:'#8a8578'},
+  {key:'ore',label:'Bijih',id:16048,color:'#b48a3a'},
+  {key:'grass',label:'Rumput',id:16049,color:'#8fae3a'},
+];
+
+let biomes=new Uint8Array(W*H); // code(0-15) | flags*16
+let naturals=[],landmarks=[],ports=[],herds=[];
+let mode='biome', selBiome=0, selNaturalIdx=0;
+let painting=false;
+
+const cv=document.getElementById('mapCanvas'), ctx=cv.getContext('2d');
+const off=document.createElement('canvas'); off.width=W; off.height=H;
+const offCtx=off.getContext('2d'); const img=offCtx.createImageData(W,H);
+
+function redrawBase(){
+  for(let i=0;i<W*H;i++){
+    const v=biomes[i]; const code=v&15, flags=(v>>4)&3;
+    const [r,g,b]=variantColor(BASE_COLORS[code]||[0,0,0], !!(flags&1), !!(flags&2));
+    img.data[i*4]=r; img.data[i*4+1]=g; img.data[i*4+2]=b; img.data[i*4+3]=255;
+  }
+  offCtx.putImageData(img,0,0);
+  render();
+}
+function render(){
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.drawImage(off,0,0,cv.width,cv.height);
+  const dot=(x,y,color,r=3)=>{ctx.fillStyle=color;ctx.beginPath();ctx.arc(x*SCALE,y*SCALE,r,0,7);ctx.fill();ctx.strokeStyle='#000';ctx.lineWidth=1;ctx.stroke();};
+  naturals.forEach(n=>{const c=NATURAL_CATS.find(c=>c.id===n.entityType);dot(n.x,n.y,c?c.color:'#fff',2);});
+  landmarks.forEach(l=>dot(l.x,l.y,'#c86bd8',4));
+  ports.forEach(p=>dot(p.x,p.y,'#3aa0ff',5));
+  herds.forEach(h=>dot(h.x,h.y,'#ff4040',3));
+  updateStatus();
+}
+function updateStatus(){
+  document.getElementById('status').textContent=
+    `${naturals.length} natural · ${landmarks.length} landmark · ${ports.length} dermaga · ${herds.length} herd`;
+}
+
+// --- biome swatches ---
+const bSwatchWrap=document.getElementById('biomeSwatches');
+Object.entries(BASE_COLORS).forEach(([code,rgb])=>{
+  const d=document.createElement('div'); d.className='swatch'+(code=='0'?' active':'');
+  d.style.background=`rgb(${rgb.join(',')})`; d.dataset.code=code;
+  d.onclick=()=>{document.querySelectorAll('#biomeSwatches .swatch').forEach(s=>s.classList.remove('active'));d.classList.add('active');selBiome=+code;};
+  bSwatchWrap.appendChild(d);
+});
+// --- natural swatches ---
+const nSwatchWrap=document.getElementById('naturalSwatches');
+NATURAL_CATS.forEach((c,i)=>{
+  const d=document.createElement('div'); d.className='swatch'+(i==0?' active':'');
+  d.style.background=c.color; d.title=c.label; d.textContent='';
+  d.onclick=()=>{document.querySelectorAll('#naturalSwatches .swatch').forEach(s=>s.classList.remove('active'));d.classList.add('active');selNaturalIdx=i;};
+  nSwatchWrap.appendChild(d);
+});
+document.getElementById('legend').innerHTML = NATURAL_CATS.map(c=>`<span style="color:${c.color}">●</span> ${c.label}`).join(' &nbsp; ')
+  + ' &nbsp; <span style="color:#c86bd8">●</span> Landmark &nbsp; <span style="color:#3aa0ff">●</span> Dermaga &nbsp; <span style="color:#ff4040">●</span> Herd';
+
+// --- mode switching ---
+document.querySelectorAll('.tool-btn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tool-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); mode=b.dataset.mode;
+  ['biome','natural','landmark','port','herd'].forEach(m=>document.getElementById('panel-'+m).style.display=(m===mode?'block':'none'));
+});
+
+function canvasToTile(e){
+  const r=cv.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const cy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+  return {x:Math.max(0,Math.min(W-1,Math.floor(cx/SCALE))), y:Math.max(0,Math.min(H-1,Math.floor(cy/SCALE)))};
+}
+function nearestIdx(list,x,y){
+  let best=-1,bd=1e9;
+  list.forEach((p,i)=>{const d=(p.x-x)**2+(p.y-y)**2; if(d<bd){bd=d;best=i;}});
+  return bd<64?best:-1;
+}
+function paintBiome(x,y){
+  const size=+document.getElementById('brushSize').value; const half=(size-1)/2;
+  const collidable=document.getElementById('fCollidable').checked?1:0;
+  const notPlant=document.getElementById('fNotPlant').checked?2:0;
+  const val=selBiome | ((collidable|notPlant)<<4);
+  for(let dy=-half;dy<=half;dy++)for(let dx=-half;dx<=half;dx++){
+    const tx=x+dx,ty=y+dy; if(tx<0||ty<0||tx>=W||ty>=H) continue;
+    biomes[ty*W+tx]=val;
+  }
+  redrawBase();
+}
+function handleDown(e){
+  e.preventDefault(); painting=true; const {x,y}=canvasToTile(e);
+  handlePoint(x,y,e.shiftKey);
+}
+function handleMove(e){
+  if(!painting) return; e.preventDefault(); const {x,y}=canvasToTile(e);
+  if(mode==='biome'){ paintBiome(x,y); }
+  else if(mode==='natural' && !e.shiftKey){
+    const density=+document.getElementById('sprayDensity').value;
+    if(Math.random()*density<1){ naturals.push({x,y,entityType:NATURAL_CATS[selNaturalIdx].id}); render(); }
+  }
+}
+function handleUp(){ painting=false; }
+function handlePoint(x,y,erase){
+  if(mode==='biome'){ paintBiome(x,y); return; }
+  if(mode==='natural'){
+    if(erase){const i=nearestIdx(naturals,x,y); if(i>=0) naturals.splice(i,1);}
+    else naturals.push({x,y,entityType:NATURAL_CATS[selNaturalIdx].id});
+  } else if(mode==='landmark'){
+    if(erase){const i=nearestIdx(landmarks,x,y); if(i>=0) landmarks.splice(i,1);}
+    else landmarks.push({x,y,id:parseInt(document.getElementById('landmarkId').value)||1,rotate:0,offsetX:0,offsetY:0,offsetZ:0,scaleX:16,scaleY:16,scaleZ:16});
+  } else if(mode==='port'){
+    if(erase){const i=nearestIdx(ports,x,y); if(i>=0) ports.splice(i,1);}
+    else { ports=[{x,y}]; } // MVP: cuma 1 dermaga
+  } else if(mode==='herd'){
+    if(erase){const i=nearestIdx(herds,x,y); if(i>=0) herds.splice(i,1);}
+    else herds.push({group:document.getElementById('herdGroup').value,x,y,entityType:parseInt(document.getElementById('herdEntity').value)||0});
+  }
+  render();
+}
+cv.addEventListener('mousedown',handleDown); cv.addEventListener('mousemove',handleMove); window.addEventListener('mouseup',handleUp);
+cv.addEventListener('touchstart',handleDown,{passive:false}); cv.addEventListener('touchmove',handleMove,{passive:false}); cv.addEventListener('touchend',handleUp);
+
+document.getElementById('clearBtn').onclick=()=>{
+  if(!confirm('Hapus semua data di editor ini?')) return;
+  biomes=new Uint8Array(W*H); naturals=[];landmarks=[];ports=[];herds=[]; redrawBase();
+};
+
+function b64FromBytes(bytes){
+  let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function bytesFromB64(b64){
+  const bin=atob(b64); const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+
+document.getElementById('exportBtn').onclick=()=>{
+  const spec={
+    template_id: document.getElementById('templateId').value.trim() || 'ri_gen_untitled',
+    level: parseInt(document.getElementById('level').value)||1,
+    role: parseInt(document.getElementById('role').value)||4,
+    width: W, height: H,
+    biomes_b64: b64FromBytes(biomes),
+    naturals, landmarks, port_points: ports, herds,
+  };
+  const json = JSON.stringify(spec);
+  const filename = spec.template_id+'.spec.json';
+  if(window.AndroidBridge && window.AndroidBridge.saveSpec){
+    // Jalan di dalam APK offline: blob download gak didukung WebView, jadi lewat jembatan native.
+    const savedPath = window.AndroidBridge.saveSpec(filename, json);
+    alert('Tersimpan: '+savedPath);
+    return;
+  }
+  const blob=new Blob([json],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=filename; a.click();
+};
+
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=(e)=>{
+  const f=e.target.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const spec=JSON.parse(reader.result);
+      document.getElementById('templateId').value=spec.template_id||'';
+      document.getElementById('level').value=spec.level||1;
+      document.getElementById('role').value=String(spec.role||4);
+      biomes = spec.biomes_b64 ? bytesFromB64(spec.biomes_b64) : new Uint8Array(W*H);
+      naturals=spec.naturals||[]; landmarks=spec.landmarks||[]; ports=spec.port_points||[]; herds=spec.herds||[];
+      redrawBase();
+    }catch(err){ alert('Gagal baca spec.json: '+err.message); }
+  };
+  reader.readAsText(f);
+};
+
+redrawBase();
+</script>
+</body>
+</html>
