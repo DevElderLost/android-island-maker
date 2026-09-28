@@ -1,1 +1,5 @@
-a
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Island Editor</string>
+    <color name="ic_launcher_background">#2a241c</color>
+</resources>
