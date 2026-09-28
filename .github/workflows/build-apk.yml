@@ -23,9 +23,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
+      # NB: sengaja gak pakai action `android-actions/setup-android@v3` — action itu
+      # nyoba install package legacy "tools" yang udah gak ada di cmdline-tools versi baru,
+      # bikin exit code 1 ("Failed to find package 'tools'"). Runner ubuntu-latest GitHub
+      # udah dateng dengan Android SDK + sdkmanager preinstall (ANDROID_HOME kesetting
+      # otomatis), jadi cukup langsung pakai sdkmanager buat nambah platform 29.
       - name: Install SDK platform 29 + build-tools
         run: |
           yes | sdkmanager --licenses > /dev/null || true
