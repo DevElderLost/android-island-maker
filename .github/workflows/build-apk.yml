@@ -18,29 +18,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      # NB: sengaja gak pakai action `android-actions/setup-android@v3` — action itu
-      # nyoba install package legacy "tools" yang udah gak ada di cmdline-tools versi baru,
-      # bikin exit code 1 ("Failed to find package 'tools'"). Runner ubuntu-latest GitHub
-      # udah dateng dengan Android SDK + sdkmanager preinstall di $ANDROID_HOME, TAPI folder
-      # cmdline-tools/<versi>/bin nya gak otomatis masuk PATH — makanya perlu dicari manual.
+      # Runner ubuntu-latest TIDAK punya cmdline-tools/sdkmanager (cuma ada platform-tools,
+      # build-tools, ndk). Jadi kita download cmdline-tools resmi dari Google dan pasang
+      # SDK sendiri di $HOME/android-sdk (folder ini pasti writable, gak perlu sudo).
       - name: Install SDK platform 29 + build-tools
         run: |
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SDKMANAGER_BIN=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 2 -name sdkmanager | sort -V | tail -1)
-          if [ -z "$SDKMANAGER_BIN" ]; then
-            echo "sdkmanager gak ketemu di $SDK_ROOT/cmdline-tools — cek isi:"; find "$SDK_ROOT" -maxdepth 3
-            exit 1
-          fi
-          export PATH="$(dirname "$SDKMANAGER_BIN"):$PATH"
-          echo "pakai sdkmanager di: $SDKMANAGER_BIN"
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-29" "build-tools;29.0.3"
-          echo "$(dirname "$SDKMANAGER_BIN")" >> "$GITHUB_PATH"
+          export ANDROID_HOME="$HOME/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdline-tools.zip \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-extract
+          mv /tmp/cmdline-extract/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-29" "build-tools;29.0.3" "build-tools;33.0.1"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - uses: gradle/actions/setup-gradle@v4
         with:
