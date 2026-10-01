@@ -1,8 +1,7 @@
 name: Build Island Editor APK
 
-# Build APK offline-editor Island Editor buat Android 10 (API 29).
-# Gak butuh gradlew/gradle-wrapper.jar dikomit ke repo — Gradle-nya
-# disediain sama gradle/actions/setup-gradle di runner.
+# Build APK Island Editor (Jetpack Compose, minSdk 29 / Android 10+).
+# Tidak perlu gradlew di repo — Gradle disediakan oleh gradle/actions/setup-gradle.
 on:
   workflow_dispatch: {}
   push:
@@ -10,6 +9,7 @@ on:
       - "app/**"
       - "build.gradle"
       - "settings.gradle"
+      - "gradle.properties"
       - ".github/workflows/build-apk.yml"
 
 jobs:
@@ -18,15 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # Runner ubuntu-latest TIDAK punya cmdline-tools/sdkmanager (cuma ada platform-tools,
-      # build-tools, ndk). Jadi kita download cmdline-tools resmi dari Google dan pasang
-      # SDK sendiri di $HOME/android-sdk (folder ini pasti writable, gak perlu sudo).
-      - name: Install SDK platform 29 + build-tools
+      # Runner tidak punya cmdline-tools/sdkmanager, jadi pasang SDK sendiri di $HOME/android-sdk.
+      - name: Install SDK platform 34 + build-tools
         run: |
           export ANDROID_HOME="$HOME/android-sdk"
           mkdir -p "$ANDROID_HOME/cmdline-tools"
@@ -36,7 +34,7 @@ jobs:
           mv /tmp/cmdline-extract/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-29" "build-tools;29.0.3" "build-tools;33.0.1"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "sdk.dir=$ANDROID_HOME" > local.properties
@@ -54,7 +52,4 @@ jobs:
           name: island-editor-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
-# Cara install: download artifact di atas, sideload ke HP (aktifin "Install dari
-# sumber tidak dikenal" buat file manager/browser kamu). APK ini debug-signed
-# (keystore bawaan Android SDK di runner) — cukup buat pemakaian sendiri,
-# TIDAK cocok buat publish ke Play Store.
+# APK ini debug-signed (keystore bawaan SDK) — cukup untuk sideload pribadi, bukan untuk Play Store.

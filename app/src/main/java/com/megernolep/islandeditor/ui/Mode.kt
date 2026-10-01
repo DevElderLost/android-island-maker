@@ -1,0 +1,59 @@
+package com.megernolep.islandeditor.ui
+
+import android.net.Uri
+
+enum class Mode(val label: String, val icon: String) {
+    BIOME("Biome", "🎨"), ROCK("Gunung", "⛰️"), NATURAL("Natural", "🌳"), LANDMARK("Landmark", "🗿"),
+    RAIL("Kereta", "🚂"), PORT("Dermaga", "⚓"), SPAWN("Spawn", "🧍"), RAFT("Rakit", "🛶"),
+    HERD("Herd", "🐾"), DECOR("Hewan objek", "🦕"), NPC("NPC", "🧑"), BUILDING("Bangunan", "🏠"),
+    TRIGGER("Zona misi", "🚩"), THORN("Thornbush", "🌵"), ERASE("Hapus", "🧽"),
+}
+
+/** Semua pengaturan alat (pilihan kuas, filter daftar, dst). Immutable; ganti lewat copy(). */
+data class ToolOpts(
+    // biome
+    val selBiome: Int = 0, val collidable: Boolean = false, val notPlant: Boolean = false,
+    val brush: Int = 3, val lockPalette: Boolean = true,
+    // gunung / batu
+    val rockSize: Int = 9, val rockRough: Int = 55, val rockLandOnly: Boolean = true, val rockErase: Boolean = false,
+    // natural
+    val selNatural: Int = 0, val natCat: String = "tree", val natBiome: Int = -1,
+    val natSearch: String = "", val natTypeFilter: Boolean = true, val sprayDensity: Int = 3,
+    // landmark & kereta
+    val selLandmark: String = "", val lmCat: String = "*", val lmSearch: String = "",
+    val selRail: String = "", val railCustom: String = "", val railRot: Int = 0,
+    // herd
+    val selAnimal: Int = 2001, val herdLevel: Int = 20, val herdGroup: String = "land", val herdDiet: String = "*",
+    val herdAll: Boolean = true, val herdSearch: String = "",
+    // hewan objek
+    val selDecor: Int = 2133, val decSearch: String = "", val decRot: Int = 0,
+    // NPC
+    val selNpc: String = "story_k", val npcSearch: String = "", val npcRadius: Int = 6, val npcPresetLv: Int = 1,
+    // bangunan
+    val selBuilding: Int = 9450, val bldCat: String = "*",
+    // zona pemicu
+    val trigType: String = "firststep", val trigFlow: String = "", val trigExit: String = "",
+    val trigTool: String = "brush", val trigSize: Int = 3, val trigShow: Boolean = true, val trigErase: Boolean = false,
+    // thornbush
+    val thornBrush: Int = 3, val thornErase: Boolean = false, val thornLand: Boolean = true,
+    // penghapus
+    val eraseSize: Int = 3,
+    val eBiome: Boolean = true, val eNatural: Boolean = true, val eLandmark: Boolean = true, val ePort: Boolean = true,
+    val eSpawn: Boolean = true, val eRaft: Boolean = true, val eDecor: Boolean = true, val eNpc: Boolean = true,
+    val eThorn: Boolean = true, val eHerd: Boolean = true, val eBuilding: Boolean = true, val eTrigger: Boolean = false,
+)
+
+enum class ExportKind { SPEC, ISLAND }
+
+/** Peringatan sebelum export (sungai bermasalah / belum ada spawn / belum ada rakit). */
+data class ExportPrompt(val kind: ExportKind, val warnings: List<String>)
+
+/** Hasil export yang sukses disimpan. */
+data class ExportResult(
+    val title: String, val path: String, val details: List<String>, val warnings: List<String>,
+    val uri: Uri, val mime: String,
+)
+
+data class ViewState(val tx: Float = 0f, val ty: Float = 0f, val k: Float = 1f, val rot: Float = 0f)
+
+data class HerdItem(val animal: com.megernolep.islandeditor.domain.AnimalItem, val level: Int, val count: Int)

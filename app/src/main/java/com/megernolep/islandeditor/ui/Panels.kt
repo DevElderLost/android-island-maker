@@ -1,0 +1,362 @@
+package com.megernolep.islandeditor.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.megernolep.islandeditor.domain.*
+
+@Composable
+fun ToolPanel(vm: EditorViewModel) {
+    when (vm.mode) {
+        Mode.BIOME -> BiomePanel(vm)
+        Mode.ROCK -> RockPanel(vm)
+        Mode.NATURAL -> NaturalPanel(vm)
+        Mode.LANDMARK -> LandmarkPanel(vm)
+        Mode.RAIL -> RailPanel(vm)
+        Mode.PORT -> Note("Ketuk peta untuk menaruh titik dermaga (dermaga lama diganti). Tempatkan di pantai.")
+        Mode.SPAWN -> SpawnPanel(vm)
+        Mode.RAFT -> RaftPanel(vm)
+        Mode.HERD -> HerdPanel(vm)
+        Mode.DECOR -> DecorPanel(vm)
+        Mode.NPC -> NpcPanel(vm)
+        Mode.BUILDING -> BuildingPanel(vm)
+        Mode.TRIGGER -> TriggerPanel(vm)
+        Mode.THORN -> ThornPanel(vm)
+        Mode.ERASE -> ErasePanel(vm)
+    }
+}
+
+// ---------------------------------------------------------------- BIOME
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BiomePanel(vm: EditorViewModel) {
+    val o = vm.opts
+    val allowed = vm.typeCodes(vm.doc.islandType)
+    val codes = Biomes.baseColors.keys.filter { !o.lockPalette || it in allowed }
+    Section("Biome")
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (c in codes) {
+            val col = Biomes.baseColors.getValue(c)
+            val on = c == o.selBiome
+            Box(
+                Modifier.size(46.dp).clip(RoundedCornerShape(10.dp))
+                    .background(Color(col[0], col[1], col[2]))
+                    .border(if (on) 3.dp else 1.dp, if (on) Color.White else Outline, RoundedCornerShape(10.dp))
+                    .clickable { vm.setOpts { it.copy(selBiome = c) } },
+                contentAlignment = Alignment.Center,
+            ) { Text(Biomes.info[c]?.icon ?: "", fontSize = 18.sp) }
+        }
+    }
+    val info = Biomes.info[o.selBiome]
+    Note("${info?.icon ?: ""} ${info?.name ?: "?"} (kode ${o.selBiome})", TextHi)
+    CheckRow("Kunci palet sesuai tipe pulau", o.lockPalette) { v -> vm.setOpts { it.copy(lockPalette = v) }; vm.applyTypeUi() }
+    CheckRow("Collidable (flag 0x80)", o.collidable) { v -> vm.setOpts { it.copy(collidable = v) } }
+    CheckRow("Tidak bisa tanam (flag 0x40)", o.notPlant) { v -> vm.setOpts { it.copy(notPlant = v) } }
+    Section("Ukuran kuas")
+    IntChips(EditorData.brushSizes, o.brush, " px") { v -> vm.setOpts { it.copy(brush = v) } }
+    Section("Cek sungai")
+    OutlinedButton(onClick = { vm.checkWater() }) { Text("Cek sungai / danau") }
+    Note(vm.waterReport)
+}
+
+// ---------------------------------------------------------------- GUNUNG
+@Composable
+private fun RockPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Note("Kuas gunung menambah flag batu (0xC0) di atas biome yang ada — tepi dibuat organik. Dipakai untuk batu raksasa/tebing.")
+    Section("Diameter (tile)")
+    IntChips(listOf(5, 9, 15, 25, 40), o.rockSize) { v -> vm.setOpts { it.copy(rockSize = v) } }
+    Section("Kekasaran tepi: ${o.rockRough}%")
+    Slider(
+        o.rockRough.toFloat(), { v -> vm.setOpts { it.copy(rockRough = v.toInt()) } }, valueRange = 0f..100f,
+        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent),
+    )
+    CheckRow("Hanya di darat (lewati air/lava)", o.rockLandOnly) { v -> vm.setOpts { it.copy(rockLandOnly = v) } }
+    CheckRow("Mode hapus batu", o.rockErase) { v -> vm.setOpts { it.copy(rockErase = v) } }
+    OutlinedButton(onClick = { vm.checkRocks() }) { Text("Cek batu vs spawn/rakit/objek") }
+    vm.rockReportLines.forEach { Note(it, if (it.startsWith("⚠")) Warn else TextHi) }
+}
+
+// ---------------------------------------------------------------- NATURAL
+@Composable
+private fun NaturalPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Section("Kategori")
+    Dropdown(
+        if (o.natCat == "*") "Semua kategori" else EditorData.natCatByKey[o.natCat]?.label ?: o.natCat,
+        listOf("*" to "Semua kategori") + EditorData.natCats.map { it.key to it.label },
+        { v -> vm.setOpts { it.copy(natCat = v) } },
+    )
+    Dropdown(
+        if (o.natBiome < 0) "Semua biome" else Biomes.short[o.natBiome] ?: "${o.natBiome}",
+        listOf(-1 to "Semua biome") + Biomes.short.map { (k, v) -> k to v },
+        { v -> vm.setOpts { it.copy(natBiome = v) } }, Modifier.padding(top = 6.dp),
+    )
+    CheckRow("Hanya yang cocok dengan tipe pulau ini", o.natTypeFilter) { v -> vm.setOpts { it.copy(natTypeFilter = v) } }
+    Field(o.natSearch, { v -> vm.setOpts { it.copy(natSearch = v) } }, "Cari natural…", Modifier.padding(vertical = 6.dp))
+    val items = vm.natItems()
+    PickList(
+        items, { it.id }, o.selNatural, { Color(vm.natColor(it)) }, { vm.natLabel(it) }, { "#${it.id}" },
+        { n -> vm.setOpts { it.copy(selNatural = n.id) } },
+    )
+    val sel = vm.catalog.natById[o.selNatural]
+    if (sel != null) {
+        SelBox {
+            Text(vm.natLabel(sel), fontSize = 13.sp)
+            Note("id ${sel.id} · biome ${sel.biomes.joinToString { Biomes.short[it] ?: "$it" }}")
+            if (sel.cat == "rock") {
+                Note("Tandai ukuran batu ini:")
+                Chips(
+                    listOf("besar" to "Besar", "kecil" to "Kecil", "khusus" to "Khusus", "" to "Reset"),
+                    vm.rockMarks[sel.id] ?: "",
+                ) { v -> vm.setRockMark(sel.id, v) }
+            }
+        }
+    }
+    if (items.any { it.cat == "rock" }) {
+        Section("Tandai massal (semua batu di daftar)")
+        Chips(listOf("besar" to "Besar", "kecil" to "Kecil", "khusus" to "Khusus", "" to "Reset"), "x") { v -> vm.toast = "${vm.bulkMarkRocks(v)} batu ditandai" }
+    }
+    Section("Kerapatan semprot saat digeser")
+    Chips(listOf(8 to "Jarang", 3 to "Sedang", 1 to "Rimbun"), o.sprayDensity) { v -> vm.setOpts { it.copy(sprayDensity = v) } }
+    Note("Ketuk = 1 objek. Geser jari = semprot beberapa objek.")
+}
+
+// ---------------------------------------------------------------- LANDMARK & KERETA
+@Composable
+private fun LandmarkPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Dropdown(
+        if (o.lmCat == "*") "Semua folder" else o.lmCat,
+        listOf("*" to "Semua folder") + vm.lmFolders.map { it to it },
+        { v -> vm.setOpts { it.copy(lmCat = v) } },
+    )
+    Field(o.lmSearch, { v -> vm.setOpts { it.copy(lmSearch = v) } }, "Cari landmark…", Modifier.padding(vertical = 6.dp))
+    PickList(
+        vm.lmItems(), { it.prefab }, o.selLandmark, { Color(0xFFC86BD8) }, { vm.lmLabel(it) }, { it.folder },
+        { l -> vm.setOpts { it.copy(selLandmark = l.prefab) } },
+    )
+    Note(o.selLandmark)
+}
+
+@Composable
+private fun RailPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Note("Landmark GLOBAL (kereta/jalan rusak) disimpan terpisah dan dipakai client sebagai objek panjang. Putar dengan slider.")
+    PickList(
+        vm.railItems, { it.prefab }, o.selRail, { Color(0xFFFF6A3D) }, { vm.lmLabel(it) }, { "" },
+        { l -> vm.setOpts { it.copy(selRail = l.prefab, railCustom = "") } }, height = 150,
+    )
+    Field(o.railCustom, { v -> vm.setOpts { it.copy(railCustom = v) } }, "…atau ketik nama prefab sendiri", Modifier.padding(top = 6.dp))
+    Section("Rotasi: ${o.railRot * 2}°")
+    Slider(
+        o.railRot.toFloat(), { v -> vm.setOpts { it.copy(railRot = v.toInt()) } }, valueRange = 0f..179f,
+        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent),
+    )
+    Chips(listOf(0 to "0°", 45 to "90°", 90 to "180°", 135 to "270°"), o.railRot) { v -> vm.setOpts { it.copy(railRot = v) } }
+}
+
+// ---------------------------------------------------------------- SPAWN / RAKIT
+@Composable
+private fun SpawnPanel(vm: EditorViewModel) {
+    val sp = vm.doc.spawn
+    Note("Ketuk peta untuk menaruh titik spawn pemain. Area 9×9 di sekelilingnya harus darat penuh.")
+    OutlinedButton(onClick = { vm.autoSpawn() }) { Text("Otomatis (tengah daratan)") }
+    Note(if (sp == null) "Belum ada spawn." else "Spawn: ${sp.x}, ${sp.y} — " + if (Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) "✓ area aman" else "⚠ area kena air/tepi", if (sp != null && !Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) Warn else TextHi)
+}
+
+@Composable
+private fun RaftPanel(vm: EditorViewModel) {
+    val r = vm.doc.raft
+    Note("Ketuk untuk menaruh rakit tutorial (blok 4×4, pojok kiri-bawah). Inti harus darat; margin 2 tile sebaiknya bebas air.")
+    if (r == null) { Note("Belum ada rakit."); return }
+    val st = Ops.raftCheck(vm.doc, r.x, r.y)
+    Note(
+        "Rakit: ${r.x}, ${r.y} — " + when {
+            st.ok -> "✓ aman"
+            st.oob -> "⚠ margin keluar peta"
+            st.core > 0 -> "⛔ ${st.core} tile inti kena air"
+            else -> "⚠ ${st.margin} tile margin kena air"
+        },
+        if (st.ok) TextHi else Warn,
+    )
+}
+
+// ---------------------------------------------------------------- HERD
+@Composable
+private fun HerdPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    val type = vm.doc.islandType
+    Section("Grup habitat")
+    Dropdown(
+        EditorData.groupLabel[o.herdGroup] ?: o.herdGroup,
+        vm.catalog.groupsFor(type, o.herdAll).map { it to (EditorData.groupLabel[it] ?: it) },
+        { v -> vm.setOpts { it.copy(herdGroup = v) }; vm.refreshHerdControls(true) },
+    )
+    Dropdown(
+        if (o.herdDiet == "*") "Semua jenis makan" else EditorData.dietLabel[o.herdDiet] ?: o.herdDiet,
+        listOf("*" to "Semua jenis makan") + vm.herdDiets().map { (d, n) -> d to "${EditorData.dietLabel[d] ?: d} ($n)" },
+        { v -> vm.setOpts { it.copy(herdDiet = v) }; vm.refreshHerdControls(true) }, Modifier.padding(top = 6.dp),
+    )
+    CheckRow("Tampilkan semua hewan (bukan hanya template asli)", o.herdAll) { v -> vm.setOpts { it.copy(herdAll = v) }; vm.refreshHerdControls(true) }
+    Field(o.herdSearch, { v -> vm.setOpts { it.copy(herdSearch = v) } }, "Cari hewan…", Modifier.padding(vertical = 6.dp))
+    PickList(
+        vm.herdItems(), { it.animal.id }, o.selAnimal,
+        { Color(EditorData.dietColor[it.animal.diet] ?: 0xFFFFFFFF.toInt()) },
+        { it.animal.name }, { if (it.count > 0) "lv${it.level} ×${it.count}" else "#${it.animal.id}" },
+        { vm.pickAnimal(it) },
+    )
+    val a = vm.catalog.animals[o.selAnimal]
+    if (a != null) {
+        Section("Level (${a.lvMin}–${a.lvMax})")
+        Stepper(o.herdLevel, a.lvMin, a.lvMax) { v -> vm.setOpts { it.copy(herdLevel = v) } }
+        Note("Titik harus di tile yang sesuai grup (mis. 'land' di darat). Satu ketukan = satu titik kawanan.")
+    }
+}
+
+// ---------------------------------------------------------------- HEWAN OBJEK
+@Composable
+private fun DecorPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Note("Hewan objek = patung statis (tidak bergerak, tidak bisa diserang). Cocok untuk Brontosaurus tutorial.")
+    Field(o.decSearch, { v -> vm.setOpts { it.copy(decSearch = v) } }, "Cari hewan…", Modifier.padding(vertical = 6.dp))
+    PickList(
+        vm.decorItems(), { it.id }, o.selDecor, { Color(EditorData.dietColor[it.diet] ?: 0xFFFFFFFF.toInt()) },
+        { vm.decorName(it) }, { "#${it.id}" }, { a -> vm.setOpts { it.copy(selDecor = a.id) } },
+    )
+    Section("Arah hadap: ${o.decRot}°")
+    Slider(
+        o.decRot.toFloat(), { v -> vm.setOpts { it.copy(decRot = v.toInt()) } }, valueRange = 0f..359f,
+        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent),
+    )
+    Chips(listOf(0 to "0°", 90 to "90°", 180 to "180°", 270 to "270°"), o.decRot) { v -> vm.setOpts { it.copy(decRot = v) } }
+}
+
+// ---------------------------------------------------------------- NPC
+@Composable
+private fun NpcPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Field(o.npcSearch, { v -> vm.setOpts { it.copy(npcSearch = v) } }, "Cari NPC…", Modifier.padding(bottom = 6.dp))
+    PickList(
+        vm.npcItems(), { it.id }, o.selNpc, { Color(if (it.kind == "story") 0xFFFFD23F else 0xFFFF5AD1) },
+        { it.name }, { if (it.kind == "story") "cerita" else "bot" }, { vm.pickNpc(it) }, height = 170,
+    )
+    val def = EditorData.npcById[o.selNpc]
+    if (def?.kind == "bot") {
+        Section("Radius jelajah (tile)")
+        Stepper(o.npcRadius, 0, 20) { v -> vm.setOpts { it.copy(npcRadius = v) } }
+    }
+    Section("Preset K & T (posisi tetap tutorial)")
+    IntChips(listOf(1, 2, 3, 4, 5), o.npcPresetLv, "") { v -> vm.setOpts { it.copy(npcPresetLv = v) } }
+    OutlinedButton(onClick = { vm.placeStoryPreset() }, modifier = Modifier.padding(top = 6.dp)) { Text("Taruh K & T level ${o.npcPresetLv}") }
+    Note("Terpasang: ${vm.doc.npcs.size} NPC")
+}
+
+// ---------------------------------------------------------------- BANGUNAN
+@Composable
+private fun BuildingPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Dropdown(
+        if (o.bldCat == "*") "Semua kategori" else o.bldCat,
+        listOf("*" to "Semua kategori") + vm.bldCats.map { it to it },
+        { v -> vm.setOpts { it.copy(bldCat = v) } },
+    )
+    Box(Modifier.padding(top = 6.dp)) {
+        PickList(
+            vm.bldItems(), { it.id }, o.selBuilding, { Color(0xFFFFA030) }, { it.name }, { "${it.w}×${it.h}" },
+            { b -> vm.setOpts { it.copy(selBuilding = b.id) } },
+        )
+    }
+    Section("Titik jangkar")
+    Chips(listOf("center" to "Tengah", "topleft" to "Kiri-bawah"), vm.doc.buildingAnchor) { vm.setBuildingAnchor(it) }
+    Note(vm.hint, Warn)
+    Note("Ketuk untuk menaruh. Kotak oranye = jejak bangunan; merah = bermasalah.")
+}
+
+// ---------------------------------------------------------------- ZONA PEMICU
+@Composable
+private fun TriggerPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    val cur = EditorData.trigTypes.firstOrNull { it.id == o.trigType } ?: EditorData.trigTypes[0]
+    Note("Zona misi tutorial: tile yang memicu alur (flow) saat pemain masuk.")
+    Dropdown(cur.label, EditorData.trigTypes.map { it.id to it.label }, { v -> vm.setOpts { it.copy(trigType = v) }; vm.cancelTrigPending() })
+    if (cur.id == "custom") Field(o.trigFlow, { v -> vm.setOpts { it.copy(trigFlow = v) } }, "nama alur (flow)", Modifier.padding(top = 6.dp))
+    Field(o.trigExit, { v -> vm.setOpts { it.copy(trigExit = v) } }, "alur keluar (opsional)", Modifier.padding(top = 6.dp))
+    Section("Alat")
+    Chips(listOf("brush" to "Kuas", "line" to "Garis", "rect" to "Kotak"), o.trigTool) { v -> vm.setOpts { it.copy(trigTool = v) }; vm.cancelTrigPending() }
+    if (o.trigTool != "rect") {
+        Section("Ukuran")
+        IntChips(listOf(1, 3, 5, 9), o.trigSize) { v -> vm.setOpts { it.copy(trigSize = v) } }
+    }
+    if (o.trigTool != "brush") Note(if (vm.trigPending == null) "Ketuk titik awal." else "Ketuk titik akhir.", Accent2)
+    CheckRow("Mode hapus", o.trigErase) { v -> vm.setOpts { it.copy(trigErase = v) } }
+    CheckRow("Tampilkan zona di peta", o.trigShow) { v -> vm.setOpts { it.copy(trigShow = v) } }
+    Note(vm.hint, Warn)
+    Section("Zona terpasang")
+    if (vm.doc.trig.isEmpty()) Note("Belum ada zona.")
+    vm.doc.trig.forEach { z ->
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(Color(z.color)))
+            Text("  ${z.flow} · ${z.cells.size} tile", fontSize = 12.sp)
+        }
+    }
+    OutlinedButton(onClick = { vm.clearTrigZone() }, modifier = Modifier.padding(top = 6.dp)) { Text("Hapus zona jenis ini") }
+}
+
+// ---------------------------------------------------------------- THORNBUSH
+@Composable
+private fun ThornPanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Note("Thornbush = penghalang jalan (objek tile, 1 tile = 1 semak). Bukan tanaman biasa.")
+    Section("Ukuran kuas")
+    IntChips(EditorData.brushSizes, o.thornBrush, " px") { v -> vm.setOpts { it.copy(thornBrush = v) } }
+    CheckRow("Mode hapus", o.thornErase) { v -> vm.setOpts { it.copy(thornErase = v) } }
+    CheckRow("Hanya di darat (lewati air)", o.thornLand) { v -> vm.setOpts { it.copy(thornLand = v) } }
+    Note("Terpasang: ${vm.doc.thorns.size} tile", TextHi)
+    Note(vm.hint, Warn)
+    OutlinedButton(onClick = { vm.clearThorns() }) { Text("Hapus semua thornbush") }
+}
+
+// ---------------------------------------------------------------- HAPUS
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ErasePanel(vm: EditorViewModel) {
+    val o = vm.opts
+    Section("Ukuran")
+    IntChips(EditorData.brushSizes, o.eraseSize, " px") { v -> vm.setOpts { it.copy(eraseSize = v) } }
+    Section("Yang dihapus")
+    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        CheckRow("Biome", o.eBiome) { v -> vm.setOpts { it.copy(eBiome = v) } }
+        CheckRow("Natural", o.eNatural) { v -> vm.setOpts { it.copy(eNatural = v) } }
+        CheckRow("Landmark", o.eLandmark) { v -> vm.setOpts { it.copy(eLandmark = v) } }
+        CheckRow("Dermaga", o.ePort) { v -> vm.setOpts { it.copy(ePort = v) } }
+        CheckRow("Spawn", o.eSpawn) { v -> vm.setOpts { it.copy(eSpawn = v) } }
+        CheckRow("Rakit", o.eRaft) { v -> vm.setOpts { it.copy(eRaft = v) } }
+        CheckRow("Hewan objek", o.eDecor) { v -> vm.setOpts { it.copy(eDecor = v) } }
+        CheckRow("NPC", o.eNpc) { v -> vm.setOpts { it.copy(eNpc = v) } }
+        CheckRow("Thornbush", o.eThorn) { v -> vm.setOpts { it.copy(eThorn = v) } }
+        CheckRow("Herd", o.eHerd) { v -> vm.setOpts { it.copy(eHerd = v) } }
+        CheckRow("Bangunan", o.eBuilding) { v -> vm.setOpts { it.copy(eBuilding = v) } }
+        CheckRow("Zona misi", o.eTrigger) { v -> vm.setOpts { it.copy(eTrigger = v) } }
+    }
+}

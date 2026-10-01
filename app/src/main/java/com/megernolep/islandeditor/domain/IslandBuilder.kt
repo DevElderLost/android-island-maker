@@ -1,0 +1,310 @@
+package com.megernolep.islandeditor.domain
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Base64
+import java.util.Random
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+/**
+ * Port dari tools/build_from_spec.py: spec (JSON hasil editor) -> terrain zip pulau.
+ * Isi zip: info.yml, config.yml, whole.biomes, whole.ocean, whole.rivers,
+ * [whole.garden], [whole.landmarks], pois.yml, [herds.yml].
+ *
+ * Yang SENGAJA tidak dibawa: pendaftaran ke region_templates.json / archipelago_templates.json
+ * (butuh data server yang tidak ada di HP) — itu tetap langkah sisi-server.
+ */
+object IslandBuilder {
+    class Output(val zip: ByteArray, val fileName: String, val warnings: List<String>, val summary: String)
+
+    private val LAND_CODES = 0..7
+    private val BIOME_NAME = mapOf(
+        0 to "temperate_forest", 1 to "tropical_forest", 2 to "desert", 3 to "tundra",
+        4 to "snow_field", 5 to "grassland", 6 to "swamp_mud", 7 to "volcanic",
+    )
+    private val THEME_BY_BIOME = mapOf(
+        "temperate_forest" to "temperate", "tropical_forest" to "tropical", "desert" to "desert",
+        "tundra" to "tundra", "snow_field" to "snow", "grassland" to "grassland",
+        "swamp_mud" to "swamp", "volcanic" to "volcanic",
+    )
+    private val OLD_TRIGGER_ALIAS = mapOf("trigger_arrive_thornbush" to "trigger_arrive_obstacle")
+
+    // ---------- helper JSON ----------
+    private fun JSONObject.list(key: String): List<JSONObject> {
+        val a = optJSONArray(key) ?: return emptyList()
+        return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+    }
+    private fun JSONObject.hasInt(key: String) = has(key) && opt(key) is Number
+
+    // ---------- bagian-bagian file ----------
+    private fun landmarksBytes(list: List<JSONObject>): ByteArray {
+        val buf = ByteBuffer.allocate(list.size * 16).order(ByteOrder.LITTLE_ENDIAN)
+        for (l in list) {
+            buf.putShort(l.optInt("x").toShort())
+            buf.putShort(l.optInt("y").toShort())
+            buf.putShort(l.optInt("id", 1).toShort())
+            buf.put(l.optInt("rotate", 0).toByte())
+            buf.putShort(l.optInt("offsetX", 0).toShort())
+            buf.putShort(l.optInt("offsetY", 0).toShort())
+            buf.putShort(l.optInt("offsetZ", 0).toShort())
+            buf.put(l.optInt("scaleX", 16).toByte())
+            buf.put(l.optInt("scaleY", 16).toByte())
+            buf.put(l.optInt("scaleZ", 16).toByte())
+        }
+        return buf.array()
+    }
+
+    private fun gardenBytes(list: List<JSONObject>): ByteArray {
+        val buf = ByteBuffer.allocate(list.size * 6).order(ByteOrder.LITTLE_ENDIAN)
+        for (n in list) {
+            buf.putShort(n.optInt("x").toShort())
+            buf.putShort(n.optInt("y").toShort())
+            buf.putShort(n.optInt("entityType").toShort())
+        }
+        return buf.array()
+    }
+
+    private fun poisYml(ports: List<JSONObject>, buildings: List<JSONObject>, warpholes: List<Pt>, rifts: List<Pt>): String {
+        val lines = ArrayList<String>()
+        if (ports.isEmpty()) lines.add("port_points: []") else {
+            lines.add("port_points:")
+            for (p in ports) lines.add("- [${p.optInt("x")}, ${p.optInt("y")}]")
+        }
+        if (warpholes.isNotEmpty()) {
+            lines.add("warpholes:")
+            warpholes.forEachIndexed { i, p -> lines.add("  $i:"); lines.add("  - ${p.x}"); lines.add("  - ${p.y}") }
+        } else lines.add("warpholes: {}")
+        if (rifts.isNotEmpty()) {
+            lines.add("rifts:")
+            for (p in rifts) { lines.add("- - ${p.x}"); lines.add("  - ${p.y}") }
+        } else lines.add("rifts: []")
+        lines.add("craters: []")
+        if (buildings.isEmpty()) lines.add("camp_artifacts: []") else {
+            lines.add("camp_artifacts:")
+            for (b in buildings) { lines.add("- entity_type: ${b.optInt("entityType")}"); lines.add("  tile: [${b.optInt("x")}, ${b.optInt("y")}]") }
+        }
+        return lines.joinToString("\n") + "\n"
+    }
+
+    private fun herdsYml(herds: List<JSONObject>): String? {
+        if (herds.isEmpty()) return null
+        val byGroup = LinkedHashMap<String, MutableList<JSONObject>>()
+        for (h in herds) byGroup.getOrPut(h.optString("group")) { ArrayList() }.add(h)
+        val lines = arrayListOf("herds:")
+        var counter = 300
+        for ((group, points) in byGroup) {
+            lines.add("  $group:")
+            for (p in points) {
+                counter++
+                lines.add("  - id: $counter")
+                lines.add("    tile: [${p.optInt("x")}, ${p.optInt("y")}]")
+            }
+        }
+        return lines.joinToString("\n") + "\n"
+    }
+
+    /**
+     * Warp hole (5) + rift (2) otomatis — pulau asli punya 5 & 2 (jarak min 50; jauh dari dermaga/bangunan 25).
+     * Deterministik: seed = hash template_id (hasil berbeda dari Python, tetapi stabil antar-export).
+     */
+    private fun autoPoi(spec: JSONObject, biomes: ByteArray): Pair<List<Pt>, List<Pt>> {
+        val ports = spec.list("port_points").map { Pt(it.optInt("x"), it.optInt("y")) }
+        val blocked = spec.list("buildings").map { Pt(it.optInt("x"), it.optInt("y")) }
+        val rng = Random(spec.optString("template_id").hashCode().toLong())
+
+        fun okLand(x: Int, y: Int, r: Int = 5): Boolean {
+            if (x - r < 0 || y - r < 0 || x + r >= W || y + r >= H) return false
+            for (yy in y - r..y + r) for (xx in x - r..x + r) {
+                val b = biomes[yy * W + xx].toInt() and 0xFF
+                if ((b and 0x3F) !in LAND_CODES || (b and 0x80) != 0) return false
+            }
+            return true
+        }
+
+        val cands = ArrayList<Pt>()
+        var y = 5
+        while (y < H - 5) {
+            var x = 5
+            while (x < W - 5) { if (okLand(x, y)) cands.add(Pt(x, y)); x += 3 }
+            y += 3
+        }
+        cands.shuffle(rng)
+
+        fun pick(n: Int, placed: List<Pt>, minD: Double): List<Pt> {
+            val out = ArrayList<Pt>()
+            for (d in doubleArrayOf(minD, minD * 0.6, minD * 0.35, 8.0)) {
+                for (c in cands) {
+                    if (out.size >= n) break
+                    val tooClose = (placed + out).any { o -> sq(c.x - o.x) + sq(c.y - o.y) < d * d }
+                    val nearFixed = (ports + blocked).any { o -> sq(c.x - o.x) + sq(c.y - o.y) < 25 * 25 }
+                    if (tooClose || nearFixed) continue
+                    out.add(c)
+                }
+            }
+            return out
+        }
+
+        val warpholes = pick(5, emptyList(), 50.0)
+        val rifts = pick(2, warpholes, 50.0)
+        return warpholes to rifts
+    }
+
+    private fun sq(v: Int): Double = v.toDouble() * v
+
+    /** Tipe pulau: spec.island_type kalau valid, kalau tidak tebak dari biome darat paling dominan. */
+    private fun resolveType(spec: JSONObject, cat: Catalog, biomes: ByteArray): Pair<String, Boolean> {
+        val t = spec.optString("island_type", "")
+        if (t.isNotEmpty() && cat.types.containsKey(t)) return t to false
+        val counts = IntArray(8); val order = ArrayList<Int>()
+        for (b in biomes) {
+            val c = b.toInt() and 0x3F
+            if (c in LAND_CODES) { if (counts[c] == 0) order.add(c); counts[c]++ }
+        }
+        if (order.isEmpty()) return "grassland" to true
+        val best = order.maxByOrNull { counts[it] } ?: order.first()   // seri: yang pertama muncul menang
+        return (BIOME_NAME[best] ?: "grassland") to true
+    }
+
+    private fun normalizeTriggers(list: List<JSONObject>): List<Map<String, Any?>> = list.map { t ->
+        val m = LinkedHashMap<String, Any?>()
+        val keys = t.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            m[k] = if (k == "flow") OLD_TRIGGER_ALIAS[t.optString("flow")] ?: t.optString("flow") else t.opt(k)
+        }
+        m
+    }
+
+    private fun thornTiles(spec: JSONObject): List<Pt> {
+        val seen = HashSet<Int>(); val out = ArrayList<Pt>()
+        for (t in spec.list("thorn_bushes")) {
+            if (!t.hasInt("x") || !t.hasInt("y")) continue
+            val x = t.getInt("x"); val y = t.getInt("y")
+            if (seen.add(y * 100000 + x)) out.add(Pt(x, y))
+        }
+        return out
+    }
+
+    private fun infoYml(spec: JSONObject, cat: Catalog, itype: String): Map<String, Any?> {
+        val w = spec.optInt("width", W); val h = spec.optInt("height", H)
+        val pre = cat.types[itype]
+        val theme = THEME_BY_BIOME[itype] ?: "grassland"
+        val tileSet = if (theme == "snow") "snowfields" else theme
+        val spawn = spec.optJSONObject("spawn_point")
+        val raft = spec.optJSONObject("raft_point")
+        val ports = spec.list("port_points")
+        val entry: Pt = when {
+            spawn != null -> Pt(spawn.optInt("x"), spawn.optInt("y"))
+            ports.isNotEmpty() -> Pt(ports[0].optInt("x"), ports[0].optInt("y"))
+            else -> Pt(w / 2, 20)
+        }
+        val prefabs = spec.optJSONArray("landmark_prefabs") ?: JSONArray()
+        val landmarks = (0 until prefabs.length()).map { i -> linkedMapOf<String, Any?>("id" to i, "prefab" to prefabs.optString(i)) }
+
+        val m = LinkedHashMap<String, Any?>()
+        // dibaca server (StarterIslands / NpcSpawner / AnimalManager) & client dari info.yml
+        if (spawn != null) m["spawn_point"] = linkedMapOf<String, Any?>("x" to spawn.optInt("x"), "y" to spawn.optInt("y"))
+        if (raft != null) m["raft_point"] = linkedMapOf<String, Any?>("x" to raft.optInt("x"), "y" to raft.optInt("y"), "size" to raft.optInt("size", 4))
+        spec.optJSONArray("npcs")?.let { if (it.length() > 0) m["npcs"] = it }
+        val statics = spec.list("static_animals").filter { it.hasInt("x") && it.hasInt("y") && it.optInt("entityType", 0) != 0 }
+        if (statics.isNotEmpty()) {
+            m["static_animals"] = statics.map { a ->
+                linkedMapOf<String, Any?>(
+                    "x" to a.optInt("x"), "y" to a.optInt("y"), "entityType" to a.optInt("entityType"),
+                    "yaw" to a.optInt("yaw", 0), "attackable" to a.optBoolean("attackable", false),
+                    "internal" to a.optString("internal", ""),
+                )
+            }
+        }
+        val trig = spec.list("tutorial_triggers")
+        if (trig.isNotEmpty()) m["tutorial_triggers"] = normalizeTriggers(trig)
+        val thorns = thornTiles(spec)
+        if (thorns.isNotEmpty()) m["thorn_bushes"] = thorns.map { linkedMapOf<String, Any?>("x" to it.x, "y" to it.y, "prop_id" to EditorData.THORN_PROP_ID) }
+        val globals = spec.list("global_landmarks")
+        if (globals.isNotEmpty()) {
+            m["global_landmarks"] = globals.map { l ->
+                linkedMapOf<String, Any?>(
+                    "x" to l.optInt("x"), "y" to l.optInt("y"), "id" to l.optInt("id", 0), "rotate" to (l.optInt("rotate", 0) and 0xFF),
+                    "offsetX" to l.optInt("offsetX", 0), "offsetY" to l.optInt("offsetY", 0), "offsetZ" to l.optInt("offsetZ", 0),
+                    "scaleX" to l.optInt("scaleX", 16), "scaleY" to l.optInt("scaleY", 16), "scaleZ" to l.optInt("scaleZ", 16),
+                )
+            }
+        }
+        m["tile_count"] = listOf(w, h)
+        m["landmarks"] = landmarks
+        m["lake_biome"] = pre?.lakeBiome ?: "grassland"
+        m["ocean_biome"] = pre?.oceanBiome ?: "warm_ocean"
+        m["river_biome"] = pre?.riverBiome ?: "temperate_forest"
+        m["color_set"] = tileSet
+        m["region_template"] = spec.getString("template_id")
+        m["tile_set"] = tileSet
+        m["entry_points"] = listOf(listOf(entry.x, entry.y))
+        return m
+    }
+
+    /** Peringatan spesies herd yang tidak dipakai template asli tipe ini (tetap ditulis). */
+    private fun speciesWarning(spec: JSONObject, cat: Catalog, itype: String): String? {
+        val allowed = cat.species[itype].orEmpty().mapValues { (_, rows) -> rows.map { it.id }.toSet() }
+        var bad = 0
+        for (h in spec.list("herds")) {
+            var et = h.optInt("entityType", 0)
+            if (et >= 10000) et /= 100
+            val ok = allowed[h.optString("group")]
+            if (!ok.isNullOrEmpty() && et !in ok) bad++
+        }
+        return if (bad > 0) "$bad titik herd berisi hewan yang tidak dipakai template asli tipe '$itype' (grup yang sama). Tetap ditulis." else null
+    }
+
+    // ---------- API ----------
+    /** @throws IllegalArgumentException kalau spec tidak valid (pesan siap tampil ke pengguna). */
+    fun build(spec: JSONObject, cat: Catalog): Output {
+        val tid = spec.optString("template_id", "").trim()
+        require(tid.isNotEmpty()) { "template_id kosong." }
+        val w = spec.optInt("width", W); val h = spec.optInt("height", H)
+        require(w == W && h == H) { "Ukuran peta ${w}x$h tidak didukung (harus ${W}x$H)." }
+        val biomes = try { Base64.getDecoder().decode(spec.getString("biomes_b64")) } catch (e: Exception) {
+            throw IllegalArgumentException("biomes_b64 tidak valid.")
+        }
+        require(biomes.size == w * h) { "biomes_b64 berukuran ${biomes.size} byte, seharusnya ${w * h}." }
+
+        val warnings = ArrayList<String>()
+        val (itype, guessed) = resolveType(spec, cat, biomes)
+        if (guessed) warnings.add("Tipe pulau ditebak dari biome dominan: $itype.")
+        speciesWarning(spec, cat, itype)?.let { warnings.add(it) }
+
+        val water = WaterLayers.decodeFromSpec(spec, w, h) ?: WaterLayers.build(biomes, w, h)
+        val (warpholes, rifts) = autoPoi(spec, biomes)
+
+        // spec lama: thornbush dulu disimpan sebagai natural blackthorn — buang yang menimpa tile penghalang
+        val tk = thornTiles(spec).map { it.y * 100000 + it.x }.toHashSet()
+        val allNat = spec.list("naturals")
+        val nat = allNat.filterNot { it.optInt("entityType") in EditorData.thornPlantIds && (it.optInt("y") * 100000 + it.optInt("x")) in tk }
+        if (nat.size != allNat.size) warnings.add("${allNat.size - nat.size} natural blackthorn di tile penghalang dibuang (thornbush = prop, bukan tanaman).")
+
+        val landmarks = spec.list("landmarks")
+        val buildings = spec.list("buildings")
+        val herds = spec.list("herds")
+
+        val bos = ByteArrayOutputStream()
+        ZipOutputStream(bos).use { z ->
+            fun put(name: String, data: ByteArray) { z.putNextEntry(ZipEntry(name)); z.write(data); z.closeEntry() }
+            put("info.yml", PyJson.dumps(infoYml(spec, cat, itype)).toByteArray(Charsets.UTF_8))
+            put("config.yml", PyJson.dumps(linkedMapOf("theme" to (THEME_BY_BIOME[itype] ?: "grassland"))).toByteArray(Charsets.UTF_8))
+            put("whole.biomes", biomes)
+            put("whole.ocean", water.ocean)
+            put("whole.rivers", water.rivers)
+            if (nat.isNotEmpty()) put("whole.garden", gardenBytes(nat))
+            if (landmarks.isNotEmpty()) put("whole.landmarks", landmarksBytes(landmarks))
+            put("pois.yml", poisYml(spec.list("port_points"), buildings, warpholes, rifts).toByteArray(Charsets.UTF_8))
+            herdsYml(herds)?.let { put("herds.yml", it.toByteArray(Charsets.UTF_8)) }
+        }
+        val summary = "tipe $itype · ${nat.size} natural · ${landmarks.size} landmark · " +
+            "${spec.list("global_landmarks").size} landmark global · ${spec.list("npcs").size} npc · " +
+            "${spec.list("static_animals").size} hewan-objek · ${herds.size} herd · ${warpholes.size} warp hole · ${rifts.size} rift"
+        return Output(bos.toByteArray(), "$tid.zip", warnings, summary)
+    }
+}

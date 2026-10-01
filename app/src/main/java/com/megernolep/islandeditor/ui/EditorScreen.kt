@@ -1,0 +1,274 @@
+package com.megernolep.islandeditor.ui
+
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.megernolep.islandeditor.domain.EditorData
+
+@Composable
+fun EditorScreen(vm: EditorViewModel) {
+    val ctx = LocalContext.current
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importFrom(uri)
+    }
+
+    LaunchedEffect(vm.toast) {
+        vm.toast?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.toast = null }
+    }
+
+    Column(Modifier.fillMaxSize().background(Bg).systemBarsPadding().imePadding()) {
+        Header(vm)
+        if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent, trackColor = SurfHi)
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            MapCanvas(vm)
+            ViewControls(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            Text(
+                "${vm.doc.naturals.size} natural · ${vm.doc.herds.size} herd · ${vm.doc.buildings.size} bangunan",
+                color = Muted, fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)
+                    .background(Bg.copy(alpha = .6f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+
+        if (vm.hint.isNotEmpty() && vm.mode != Mode.BUILDING) {
+            Text(
+                vm.hint, color = Warn, fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth().background(SurfHi).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+
+        AnimatedVisibility(vm.panelOpen) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Surf)
+                    .verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 4.dp),
+            ) { ToolPanel(vm); Box(Modifier.size(8.dp)) }
+        }
+
+        ModeBar(vm)
+        ActionBar(vm) { importLauncher.launch(arrayOf("*/*")) }
+    }
+
+    Dialogs(vm)
+}
+
+// ------------------------------------------------------------ header
+@Composable
+private fun Header(vm: EditorViewModel) {
+    var open by remember { mutableStateOf(true) }
+    val d = vm.doc
+    Column(Modifier.fillMaxWidth().background(Surf).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("🏝️ Island Editor", fontSize = 16.sp, color = Accent, modifier = Modifier.weight(1f))
+            Text(if (open) "Sembunyikan ▴" else "Info pulau ▾", color = Muted, fontSize = 12.sp, modifier = Modifier.clickable { open = !open }.padding(4.dp))
+        }
+        AnimatedVisibility(open) {
+            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(d.templateId, { vm.setTemplateId(it.filter { c -> !c.isWhitespace() }) }, "template_id", Modifier.weight(1f))
+                    Field(d.level.toString(), { it.toIntOrNull()?.let { v -> vm.setLevel(v.coerceIn(1, 99)) } }, "lv", Modifier.weight(.35f), number = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Dropdown(
+                        "Peran ${d.role}", (1..6).map { it to "Peran $it" }, { vm.setRole(it) }, Modifier.weight(.45f),
+                    )
+                    Dropdown(
+                        vm.catalog.types[d.islandType]?.label ?: d.islandType,
+                        EditorData.typeOrder.filter { vm.catalog.types.containsKey(it) }.map { it to (vm.catalog.types.getValue(it).label) },
+                        { vm.requestTypeChange(it) }, Modifier.weight(.55f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------ kontrol tampilan
+@Composable
+private fun CircleBtn(label: String, active: Boolean = false, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background((if (active) Accent else Surf).copy(alpha = .92f))
+            .border(1.dp, Outline, CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = if (active) Bg else TextHi, fontSize = 16.sp) }
+}
+
+@Composable
+private fun ViewControls(vm: EditorViewModel, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        CircleBtn("＋") { vm.zoomBy(1.4f) }
+        CircleBtn("－") { vm.zoomBy(1f / 1.4f) }
+        CircleBtn("⤢") { vm.fitView() }
+        CircleBtn("↻") { vm.rotateBy(0.2618f) }
+        CircleBtn("🧭", vm.gameView) { vm.toggleGameView() }
+        CircleBtn("✋", vm.panMode) { vm.panMode = !vm.panMode }
+    }
+}
+
+// ------------------------------------------------------------ bar mode
+@Composable
+private fun ModeBar(vm: EditorViewModel) {
+    LazyRow(
+        Modifier.fillMaxWidth().background(Surf), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(Mode.values().toList()) { m ->
+            val on = vm.mode == m
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(if (on) Accent else SurfHi)
+                    .border(1.dp, if (on) Accent else Outline, RoundedCornerShape(50))
+                    .clickable { vm.onModeTap(m) }.padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(m.icon, fontSize = 14.sp)
+                Text("  ${m.label}", color = if (on) Bg else TextHi, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------ bar aksi
+@Composable
+private fun ActionBar(vm: EditorViewModel, onImport: () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(Surf).padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { SmallBtn("↶ Undo", enabled = vm.canUndo) { vm.undo() } }
+            item { SmallBtn("↔ Flip H") { vm.flip(true) } }
+            item { SmallBtn("↕ Flip V") { vm.flip(false) } }
+            item { SmallBtn("📂 Impor spec") { onImport() } }
+            item { SmallBtn("🗑 Kosongkan", danger = true) { vm.clearPrompt = true } }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { vm.requestExport(ExportKind.SPEC) }, enabled = !vm.busy,
+                modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Outline),
+                contentPadding = PaddingValues(vertical = 12.dp),
+            ) { Text("💾 Simpan .spec.json", color = TextHi, fontSize = 12.sp) }
+            Button(
+                onClick = { vm.requestExport(ExportKind.ISLAND) }, enabled = !vm.busy,
+                modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Bg),
+                contentPadding = PaddingValues(vertical = 12.dp),
+            ) { Text("🏝️ Export as Island", fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+private fun SmallBtn(label: String, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick, enabled = enabled, shape = RoundedCornerShape(50), border = BorderStroke(1.dp, if (danger) Danger.copy(alpha = .5f) else Outline),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+    ) { Text(label, color = if (!enabled) Muted else if (danger) Danger else TextHi, fontSize = 12.sp) }
+}
+
+// ------------------------------------------------------------ dialog
+@Composable
+private fun Dialogs(vm: EditorViewModel) {
+    val ctx = LocalContext.current
+
+    vm.pendingExport?.let { p ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissExport() }, containerColor = SurfHi,
+            title = { Text("Periksa dulu") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    p.warnings.forEach { Note("• $it", Warn) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.confirmExport() }) { Text("Tetap export", color = Accent) } },
+            dismissButton = { TextButton(onClick = { vm.dismissExport() }) { Text("Perbaiki dulu", color = TextHi) } },
+        )
+    }
+
+    vm.typeChangePrompt?.let { t ->
+        val label = vm.catalog.types[t]?.label ?: t
+        AlertDialog(
+            onDismissRequest = { vm.dismissTypeChange() }, containerColor = SurfHi,
+            title = { Text("Ubah tipe ke $label?") },
+            text = { Text("Semua tile darat/pantai/laut diubah ke biome tipe baru. Herd yang tidak cocok dibuang. Objek lain tetap. Bisa di-undo.", fontSize = 13.sp) },
+            confirmButton = { TextButton(onClick = { vm.applyTypeChange(t) }) { Text("Ubah", color = Accent) } },
+            dismissButton = { TextButton(onClick = { vm.dismissTypeChange() }) { Text("Batal", color = TextHi) } },
+        )
+    }
+
+    if (vm.clearPrompt) {
+        AlertDialog(
+            onDismissRequest = { vm.clearPrompt = false }, containerColor = SurfHi,
+            title = { Text("Kosongkan semua?") },
+            text = { Text("Peta dan semua objek dihapus (template_id, level, tipe tetap). Bisa di-undo.", fontSize = 13.sp) },
+            confirmButton = { TextButton(onClick = { vm.clearAll() }) { Text("Kosongkan", color = Danger) } },
+            dismissButton = { TextButton(onClick = { vm.clearPrompt = false }) { Text("Batal", color = TextHi) } },
+        )
+    }
+
+    vm.exportResult?.let { r ->
+        AlertDialog(
+            onDismissRequest = { vm.exportResult = null }, containerColor = SurfHi,
+            title = { Text("✅ ${r.title}") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(r.path, color = Accent, fontSize = 13.sp)
+                    r.details.forEach { Note(it) }
+                    r.warnings.forEach { Note("⚠ $it", Warn) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.exportResult = null }) { Text("OK", color = Accent) } },
+            dismissButton = {
+                TextButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = r.mime
+                        putExtra(Intent.EXTRA_STREAM, r.uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    ctx.startActivity(Intent.createChooser(send, "Bagikan file"))
+                }) { Text("Bagikan", color = TextHi) }
+            },
+        )
+    }
+}

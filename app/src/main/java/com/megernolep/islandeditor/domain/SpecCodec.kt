@@ -1,0 +1,213 @@
+package com.megernolep.islandeditor.domain
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Base64
+
+/** Konversi Doc <-> spec JSON (format `*.spec.json`, version 2; kompatibel dengan editor HTML lama). */
+object SpecCodec {
+    const val VERSION = 2
+
+    private fun b64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
+
+    private fun pt(x: Int, y: Int) = JSONObject().put("x", x).put("y", y)
+
+    // ===================== ENCODE =====================
+    /** @param includeWater false untuk draft autosave (lebih cepat; lapisan air bisa dihitung ulang). */
+    fun encode(doc: Doc, cat: Catalog, includeWater: Boolean = true): JSONObject {
+        // id landmark = index prefab di info.yml pulau ini (dibangun ulang tiap export)
+        val prefabs = ArrayList<String>()
+        for (l in doc.landmarks) if (l.prefab.isNotEmpty() && l.prefab !in prefabs) prefabs.add(l.prefab)
+        fun lm(l: Landmark): JSONObject = JSONObject()
+            .put("x", l.x).put("y", l.y).put("prefab", l.prefab)
+            .put("id", if (l.prefab.isNotEmpty()) prefabs.indexOf(l.prefab) else 0)
+            .put("rotate", l.rotate)
+            .put("offsetX", l.offsetX).put("offsetY", l.offsetY).put("offsetZ", l.offsetZ)
+            .put("scaleX", l.scaleX).put("scaleY", l.scaleY).put("scaleZ", l.scaleZ)
+
+        val spec = JSONObject()
+        spec.put("template_id", doc.templateId.trim().ifEmpty { "ri_gen_untitled" })
+        spec.put("level", doc.level)
+        spec.put("role", doc.role)
+        spec.put("version", VERSION)
+        spec.put("island_type", doc.islandType)
+        spec.put("width", W)
+        spec.put("height", H)
+        spec.put("biomes_b64", b64(doc.biomes))
+        if (includeWater) {
+            val water = WaterLayers.build(doc.biomes)
+            spec.put("water_layers", 1)
+            spec.put("ocean_b64", b64(water.ocean))
+            spec.put("rivers_b64", b64(water.rivers))
+        }
+        spec.put("naturals", JSONArray(doc.naturals.map { pt(it.x, it.y).put("entityType", it.entityType) }))
+        spec.put("landmarks", JSONArray(doc.landmarks.filter { !EditorData.isGlobalPrefab(it.prefab) }.map { lm(it) }))
+        spec.put("global_landmarks", JSONArray(doc.landmarks.filter { EditorData.isGlobalPrefab(it.prefab) }.map { lm(it) }))
+        spec.put("landmark_prefabs", JSONArray(prefabs))
+        spec.put("port_points", JSONArray(doc.ports.map { pt(it.x, it.y) }))
+        spec.put("spawn_point", doc.spawn?.let { pt(it.x, it.y) } ?: JSONObject.NULL)
+        spec.put("raft_point", doc.raft?.let { pt(it.x, it.y).put("size", 4) } ?: JSONObject.NULL)
+        val entry = doc.spawn?.let { listOf(it) } ?: doc.ports
+        spec.put("entry_points", JSONArray(entry.map { JSONArray(listOf(it.x, it.y)) }))
+        spec.put("herds", JSONArray(doc.herds.map {
+            JSONObject().put("group", it.group).put("x", it.x).put("y", it.y)
+                .put("entityType", it.entityType).put("level", it.level)
+        }))
+        spec.put("tutorial_triggers", encodeTriggers(doc.trig))
+        spec.put("thorn_bushes", JSONArray(doc.thorns.map { k ->
+            JSONObject().put("x", k % W).put("y", k / W).put("prop_id", EditorData.THORN_PROP_ID)
+        }))
+        spec.put("npcs", JSONArray(doc.npcs.map { n ->
+            val info = EditorData.npcById[n.id]
+            if (n.kind == "story") {
+                JSONObject().put("id", n.id).put("kind", "story").put("epic_type", n.epic)
+                    .put("x", n.x).put("y", n.y).put("prefab", info?.prefab ?: JSONObject.NULL)
+            } else {
+                JSONObject().put("id", n.id).put("kind", "bot").put("index", info?.idx ?: 0)
+                    .put("x", n.x).put("y", n.y).put("radius", n.radius).put("name", info?.name ?: n.id)
+                    .put("prefab", info?.prefab ?: JSONObject.NULL).put("male", info?.male ?: false)
+            }
+        }))
+        spec.put("static_animals", JSONArray(doc.decor.map { d ->
+            JSONObject().put("x", d.x).put("y", d.y).put("entityType", d.entityType).put("yaw", d.yaw)
+                .put("attackable", false).put("internal", cat.animals[d.entityType]?.internal ?: "")
+        }))
+        spec.put("buildings", JSONArray(doc.buildings.map { pt(it.x, it.y).put("entityType", it.entityType) }))
+        spec.put("building_anchor", doc.buildingAnchor)
+        return spec
+    }
+
+    private fun encodeTriggers(zones: List<TrigZone>): JSONArray {
+        val out = JSONArray()
+        for (z in zones) {
+            if (z.cells.isEmpty()) continue
+            val rows = java.util.TreeMap<Int, MutableList<Int>>()
+            for (i in z.cells) rows.getOrPut(i / W) { ArrayList() }.add(i % W)
+            val runs = JSONArray()
+            for ((y, xsRaw) in rows) {
+                val xs = xsRaw.sorted()
+                var st = xs[0]; var pv = xs[0]
+                for (k in 1..xs.size) {
+                    val v = if (k < xs.size) xs[k] else Int.MIN_VALUE
+                    if (k < xs.size && v == pv + 1) { pv = v; continue }
+                    runs.put(JSONArray(listOf(y, st, pv)))
+                    if (k < xs.size) { st = v; pv = v }
+                }
+            }
+            val o = JSONObject().put("flow", z.flow).put("runs", runs)
+            if (z.exit.isNotEmpty()) o.put("exit_flow", z.exit)
+            out.put(o)
+        }
+        return out
+    }
+
+    // ===================== DECODE =====================
+    /** @throws IllegalArgumentException kalau spec rusak. Migrasi spec lama ikut ditangani. */
+    fun decode(spec: JSONObject, cat: Catalog): Doc {
+        var biomes = if (spec.has("biomes_b64")) {
+            try { Base64.getDecoder().decode(spec.getString("biomes_b64")) } catch (e: Exception) {
+                throw IllegalArgumentException("biomes_b64 tidak valid.")
+            }
+        } else ByteArray(W * H)
+        require(biomes.size == W * H) { "Ukuran biomes ${biomes.size} byte, seharusnya ${W * H} (peta ${W}x$H)." }
+        // Migrasi spec lama: dulu flag di bit 0x10/0x20. Kode biome valid cuma 0-15, jadi bit 0x30 = format lama.
+        if (biomes.any { (it.toInt() and 0x30) != 0 }) {
+            biomes = ByteArray(biomes.size) { i ->
+                val v = biomes[i].toInt() and 0xFF
+                ((v and 15) or (if ((v and 0x10) != 0) FLAG_COLLIDABLE else 0) or (if ((v and 0x20) != 0) FLAG_NOPLANT else 0)).toByte()
+            }
+        }
+
+        fun objs(key: String): List<JSONObject> {
+            val a = spec.optJSONArray(key) ?: return emptyList()
+            return (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+        }
+        fun JSONObject.hasXY() = opt("x") is Number && opt("y") is Number
+
+        val type = spec.optString("island_type", "").let { if (cat.types.containsKey(it)) it else "temperate_forest" }
+
+        val prefabsArr = spec.optJSONArray("landmark_prefabs") ?: JSONArray()
+        fun prefabAt(id: Int) = if (id in 0 until prefabsArr.length()) prefabsArr.optString(id) else ""
+        val landmarks = (objs("landmarks") + objs("global_landmarks")).filter { it.hasXY() }.map { l ->
+            val pf = l.optString("prefab", "").ifEmpty { prefabAt(l.optInt("id", 0)) }
+            Landmark(
+                l.optInt("x"), l.optInt("y"), pf, l.optInt("rotate", 0),
+                l.optInt("offsetX", 0), l.optInt("offsetY", 0), l.optInt("offsetZ", 0),
+                l.optInt("scaleX", 16), l.optInt("scaleY", 16), l.optInt("scaleZ", 16),
+            )
+        }
+
+        val thorns = LinkedHashSet<Int>()
+        for (t in objs("thorn_bushes")) if (t.hasXY()) {
+            val x = t.optInt("x"); val y = t.optInt("y")
+            if (x in 0 until W && y in 0 until H) thorns.add(y * W + x)
+        }
+        // Migrasi: dulu thornbush = natural blackthorn 11001/11039. Buang natural palsu di tile penghalang.
+        val naturals = objs("naturals").filter { it.hasXY() }.map { Natural(it.optInt("x"), it.optInt("y"), it.optInt("entityType")) }
+            .filterNot { it.entityType in EditorData.thornPlantIds && (it.y * W + it.x) in thorns }
+
+        val npcs = objs("npcs").filter { it.hasXY() && EditorData.npcById.containsKey(it.optString("id")) }.map { n ->
+            val info = EditorData.npcById.getValue(n.optString("id"))
+            if (info.kind == "story") Npc(info.id, "story", n.optInt("x"), n.optInt("y"), epic = info.epic)
+            else Npc(info.id, "bot", n.optInt("x"), n.optInt("y"), radius = n.optInt("radius", 0))
+        }
+
+        val herds = objs("herds").filter { it.hasXY() }.map { h ->
+            val et = h.optInt("entityType", 0)
+            if (et >= 10000) Herd(h.optString("group", "land"), h.optInt("x"), h.optInt("y"), et / 100, et % 100)
+            else {
+                val lv = h.optInt("level", 0)
+                Herd(h.optString("group", "land"), h.optInt("x"), h.optInt("y"), et, if (lv != 0) lv else (cat.animals[et]?.lvMin ?: 20))
+            }
+        }
+
+        fun ptOrNull(key: String): Pt? {
+            val o = spec.optJSONObject(key) ?: return null
+            return if (o.hasXY()) Pt(o.optInt("x"), o.optInt("y")) else null
+        }
+
+        return Doc(
+            templateId = spec.optString("template_id", ""),
+            level = spec.optInt("level", 1).let { if (it == 0) 1 else it },
+            role = spec.optInt("role", 4).let { if (it == 0) 4 else it },
+            islandType = type,
+            biomes = biomes,
+            naturals = naturals,
+            landmarks = landmarks,
+            ports = objs("port_points").filter { it.hasXY() }.map { Pt(it.optInt("x"), it.optInt("y")) },
+            herds = herds,
+            buildings = objs("buildings").filter { it.hasXY() }.map { Building(it.optInt("x"), it.optInt("y"), it.optInt("entityType")) },
+            decor = objs("static_animals").filter { it.hasXY() }.map { Decor(it.optInt("x"), it.optInt("y"), it.optInt("entityType"), it.optInt("yaw", 0)) },
+            npcs = npcs,
+            thorns = thorns,
+            trig = decodeTriggers(spec.optJSONArray("tutorial_triggers")),
+            spawn = ptOrNull("spawn_point"),
+            raft = ptOrNull("raft_point"),
+            buildingAnchor = spec.optString("building_anchor", "center").let { if (it == "topleft") it else "center" },
+        )
+    }
+
+    private fun decodeTriggers(arr: JSONArray?): List<TrigZone> {
+        if (arr == null) return emptyList()
+        val out = ArrayList<TrigZone>()
+        for (i in 0 until arr.length()) {
+            val t = arr.optJSONObject(i) ?: continue
+            var flow = t.optString("flow", "")
+            val runs = t.optJSONArray("runs") ?: continue
+            if (flow.isEmpty()) continue
+            if (flow == "trigger_arrive_thornbush") flow = "trigger_arrive_obstacle"   // alias nama lama
+            val cells = LinkedHashSet<Int>()
+            for (j in 0 until runs.length()) {
+                val r = runs.optJSONArray(j) ?: continue
+                if (r.length() < 3) continue
+                val y = r.optInt(0)
+                if (y !in 0 until H) continue
+                val a = maxOf(0, minOf(r.optInt(1), r.optInt(2)))
+                val b = minOf(W - 1, maxOf(r.optInt(1), r.optInt(2)))
+                for (x in a..b) cells.add(y * W + x)
+            }
+            if (cells.isNotEmpty()) out.add(TrigZone(flow, t.optString("exit_flow", ""), Ops.trigColor(flow), cells))
+        }
+        return out
+    }
+}

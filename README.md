@@ -1,56 +1,38 @@
-# Island Editor (Android offline)
+# Island Editor (Android · Jetpack Compose)
 
-Wrapper WebView offline buat `island_editor.html` (editor pulau Durango) — target
-**Android 10 (API 29)**, minSdk=targetSdk=29. Semua HTML/JS-nya ke-bundle di
-`app/src/main/assets/island_editor.html`, jadi jalan tanpa internet sama sekali.
+Editor pulau 256×256 untuk Isle-style island pack, **sepenuhnya native** (tanpa HTML/WebView) dan dengan
+**builder pulau di dalam APK** — tidak perlu lagi menjalankan `build_from_spec.py` di PC.
 
-## Struktur
+## Tombol export
+
+| Tombol | Hasil | Lokasi |
+|---|---|---|
+| **💾 Simpan .spec.json** | `<template_id>.spec.json` — bisa diimpor lagi ke editor | `Downloads/` |
+| **🏝️ Export as Island** | `<template_id>.zip` — terrain zip pulau siap pakai | `Downloads/` |
+
+Isi zip: `info.yml`, `config.yml`, `whole.biomes`, `whole.ocean`, `whole.rivers`,
+`whole.garden`\*, `whole.landmarks`\*, `pois.yml`, `herds.yml`\* (\* hanya jika ada datanya).
+
+Pendaftaran ke `region_templates.json` / `archipelago_templates.json` tetap langkah sisi-server
+(datanya tidak ada di HP).
+
+## Struktur kode
+
 ```
-app/
-  build.gradle                 - config Gradle module, minSdk/targetSdk 29
-  src/main/
-    AndroidManifest.xml
-    java/.../MainActivity.java - WebView + jembatan simpan/buka file
-    assets/island_editor.html  - editor-nya (salinan dari artifact Claude)
-.github/workflows/build-apk.yml - CI, hasil APK jadi artifact download
+domain/   logika murni, tanpa UI (mudah dites)
+  Model.kt         Doc & data class
+  Catalog.kt       katalog natural/landmark/bangunan/hewan (assets/*.json)
+  Ops.kt           kuas, penghapus, flip, validasi, zona pemicu
+  WaterLayers.kt   whole.ocean + whole.rivers dari grid biome
+  SpecCodec.kt     Doc <-> .spec.json
+  IslandBuilder.kt spec -> island zip (port dari build_from_spec.py)
+  PyJson.kt        serializer ala Python json.dumps (info.yml / config.yml)
+data/FileStore.kt  simpan ke Downloads (MediaStore), baca file (SAF), draft autosave
+ui/                Compose: EditorViewModel, MapCanvas, Panels, EditorScreen, Theme
 ```
 
-## Setup repo
-```
-git init
-git add .
-git commit -m "island editor android wrapper"
-git remote add origin <url repo kamu>
-git push -u origin main
-```
-Lalu buka tab **Actions** di GitHub → "Build Island Editor APK" → Run workflow.
-Hasil APK-nya ada di artifact run itu (debug-signed, cukup buat sideload sendiri).
+## Build
 
-## Kenapa perlu wrapper native (bukan cuma buka HTML-nya di Chrome offline)
-- WebView default **gak dukung** `<input type=file>` tanpa `onShowFileChooser`
-  di-override manual → makanya ada `MainActivity.java`.
-- WebView **gak reliable** buat blob download (`<a download>`) → tombol
-  "Export spec.json" di HTML manggil `AndroidBridge.saveSpec()` yang nulis
-  langsung ke folder Downloads lewat `MediaStore` (aman buat scoped storage
-  Android 10, gak butuh permission storage).
-
-## Alur kerja penuh
-1. Buka app ini di HP (offline, gak perlu koneksi).
-2. Lukis pulau → **Export spec.json** → kesimpen di `Downloads/`.
-3. Pindahin file itu ke folder `island_specs/` di **repo gen-island** kamu
-   (langkah manual — transfer file lewat kabel/cloud/git app, gak otomatis).
-4. Di repo gen-island, jalanin workflow `gen-island-from-spec.yml` (atau
-   `build_from_spec.py` lokal) buat bikin terrain zip + daftarin ke
-   `region_templates.json`/`archipelago_templates.json`.
-
-## Update HTML editor
-Kalau editor `island_editor.html`-nya direvisi lagi, tinggal timpa file di
-`app/src/main/assets/island_editor.html`, commit, workflow otomatis build ulang
-(trigger `push` udah diset di `.github/workflows/build-apk.yml`).
-
-## Kalau AGP/Gradle version di build.gradle root udah ketinggalan
-`com.android.tools.build:gradle:8.1.4` + Gradle 8.4 dipilih karena stabil dan
-kompatibel JDK 17 di titik ini dibikin. Kalau workflow gagal karena versi Android
-Gradle Plugin ketinggalan (Google sering update tahunan), naikin versi classpath
-di `build.gradle` root + `gradle-version` di workflow barengan — cek kombinasi
-kompatibelnya di halaman rilis AGP.
+CI: `.github/workflows/build-apk.yml` (artifact `island-editor-debug-apk`).
+Lokal: Android Studio (JDK 17) atau `gradle assembleDebug`.
+Versi: AGP 8.1.4 · Gradle 8.4 · Kotlin 1.9.22 · Compose compiler 1.5.10 · Compose BOM 2024.02.00.
