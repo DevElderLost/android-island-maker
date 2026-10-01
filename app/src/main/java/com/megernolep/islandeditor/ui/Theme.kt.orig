@@ -1,9 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.fillMaxSize
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -45,8 +41,5 @@ private val Type = Typography(
 @Composable
 fun IslandTheme(content: @Composable () -> Unit) {
     // Aplikasi ini sengaja selalu gelap.
-    MaterialTheme(colorScheme = Scheme, typography = Type) {
-        // Tanpa Surface, Text tanpa warna eksplisit jatuh ke hitam (LocalContentColor) di latar gelap.
-        Surface(color = Bg, contentColor = TextHi, modifier = Modifier.fillMaxSize(), content = content)
-    }
+    MaterialTheme(colorScheme = Scheme, typography = Type, content = content)
 }

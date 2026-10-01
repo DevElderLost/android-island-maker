@@ -72,7 +72,8 @@ private fun BiomePanel(vm: EditorViewModel) {
     CheckRow("Kunci palet sesuai tipe pulau", o.lockPalette) { v -> vm.setOpts { it.copy(lockPalette = v) }; vm.applyTypeUi() }
     CheckRow("Collidable (flag 0x80)", o.collidable) { v -> vm.setOpts { it.copy(collidable = v) } }
     CheckRow("Tidak bisa tanam (flag 0x40)", o.notPlant) { v -> vm.setOpts { it.copy(notPlant = v) } }
-    SizeSlider("Ukuran kuas", o.brush, 1, 63, odd = true) { v -> vm.setOpts { it.copy(brush = v) } }
+    Section("Ukuran kuas")
+    IntChips(EditorData.brushSizes, o.brush, " px") { v -> vm.setOpts { it.copy(brush = v) } }
     Section("Cek sungai")
     OutlinedButton(onClick = { vm.checkWater() }) { Text("Cek sungai / danau") }
     Note(vm.waterReport)
@@ -83,7 +84,8 @@ private fun BiomePanel(vm: EditorViewModel) {
 private fun RockPanel(vm: EditorViewModel) {
     val o = vm.opts
     Note("Kuas gunung menambah flag batu (0xC0) di atas biome yang ada — tepi dibuat organik. Dipakai untuk batu raksasa/tebing.")
-    SizeSlider("Diameter gunung", o.rockSize, 2, 80) { v -> vm.setOpts { it.copy(rockSize = v) } }
+    Section("Diameter (tile)")
+    IntChips(listOf(5, 9, 15, 25, 40), o.rockSize) { v -> vm.setOpts { it.copy(rockSize = v) } }
     Section("Kekasaran tepi: ${o.rockRough}%")
     Slider(
         o.rockRough.toFloat(), { v -> vm.setOpts { it.copy(rockRough = v.toInt()) } }, valueRange = 0f..100f,
@@ -303,7 +305,8 @@ private fun TriggerPanel(vm: EditorViewModel) {
     Section("Alat")
     Chips(listOf("brush" to "Kuas", "line" to "Garis", "rect" to "Kotak"), o.trigTool) { v -> vm.setOpts { it.copy(trigTool = v) }; vm.cancelTrigPending() }
     if (o.trigTool != "rect") {
-        SizeSlider("Ukuran kuas zona", o.trigSize, 1, 41) { v -> vm.setOpts { it.copy(trigSize = v) } }
+        Section("Ukuran")
+        IntChips(listOf(1, 3, 5, 9), o.trigSize) { v -> vm.setOpts { it.copy(trigSize = v) } }
     }
     if (o.trigTool != "brush") Note(if (vm.trigPending == null) "Ketuk titik awal." else "Ketuk titik akhir.", Accent2)
     CheckRow("Mode hapus", o.trigErase) { v -> vm.setOpts { it.copy(trigErase = v) } }
@@ -325,7 +328,8 @@ private fun TriggerPanel(vm: EditorViewModel) {
 private fun ThornPanel(vm: EditorViewModel) {
     val o = vm.opts
     Note("Thornbush = penghalang jalan (objek tile, 1 tile = 1 semak). Bukan tanaman biasa.")
-    SizeSlider("Ukuran kuas", o.thornBrush, 1, 63, odd = true) { v -> vm.setOpts { it.copy(thornBrush = v) } }
+    Section("Ukuran kuas")
+    IntChips(EditorData.brushSizes, o.thornBrush, " px") { v -> vm.setOpts { it.copy(thornBrush = v) } }
     CheckRow("Mode hapus", o.thornErase) { v -> vm.setOpts { it.copy(thornErase = v) } }
     CheckRow("Hanya di darat (lewati air)", o.thornLand) { v -> vm.setOpts { it.copy(thornLand = v) } }
     Note("Terpasang: ${vm.doc.thorns.size} tile", TextHi)
@@ -338,7 +342,8 @@ private fun ThornPanel(vm: EditorViewModel) {
 @Composable
 private fun ErasePanel(vm: EditorViewModel) {
     val o = vm.opts
-    SizeSlider("Ukuran penghapus", o.eraseSize, 1, 63, odd = true) { v -> vm.setOpts { it.copy(eraseSize = v) } }
+    Section("Ukuran")
+    IntChips(EditorData.brushSizes, o.eraseSize, " px") { v -> vm.setOpts { it.copy(eraseSize = v) } }
     Section("Yang dihapus")
     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         CheckRow("Biome", o.eBiome) { v -> vm.setOpts { it.copy(eBiome = v) } }

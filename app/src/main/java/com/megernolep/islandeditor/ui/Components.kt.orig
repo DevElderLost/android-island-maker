@@ -1,11 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import kotlin.math.roundToInt
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -66,17 +60,15 @@ fun Note(text: String, color: Color = Muted, modifier: Modifier = Modifier) {
 @Composable
 fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = TextHi, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(end = 12.dp))
-        Switch(
-            checked = checked, onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Bg, checkedTrackColor = Accent, checkedBorderColor = Accent,
-                uncheckedThumbColor = Muted, uncheckedTrackColor = SurfHi, uncheckedBorderColor = Outline,
-            ),
+        Checkbox(
+            checked, onCheckedChange = null,
+            colors = CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Muted, checkmarkColor = Bg),
+            modifier = Modifier.padding(end = 8.dp).size(20.dp),
         )
+        Text(label, fontSize = 13.sp)
     }
 }
 
@@ -196,37 +188,4 @@ fun SelBox(content: @Composable () -> Unit) {
         Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(SurfHi)
             .border(1.dp, Outline, RoundedCornerShape(10.dp)).padding(10.dp),
     ) { content() }
-}
-
-/**
- * Slider ukuran kuas (menggantikan chip 1/3/7/15 px yang di-hardcode).
- * odd = true: hanya ukuran ganjil (1,3,5,…) supaya kuas simetris di sekitar titik sentuh.
- */
-@Composable
-fun SizeSlider(
-    label: String, value: Int, min: Int, max: Int,
-    unit: String = "tile", odd: Boolean = false, onChange: (Int) -> Unit,
-) {
-    val lo = if (odd) 0 else min
-    val hi = if (odd) (max - 1) / 2 else max
-    val pos = (if (odd) (value - 1) / 2 else value).coerceIn(lo, hi)
-    val shown = if (odd) 2 * pos + 1 else pos
-    Column(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = TextHi, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Text("$shown $unit", color = Accent, fontSize = 13.sp)
-        }
-        Slider(
-            value = pos.toFloat(),
-            onValueChange = { f ->
-                val p = f.roundToInt()
-                val v = if (odd) 2 * p + 1 else p
-                if (v != shown) onChange(v)
-            },
-            valueRange = lo.toFloat()..hi.toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Outline,
-            ),
-        )
-    }
 }

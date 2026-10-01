@@ -1,14 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.foundation.layout.height
-
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,7 +52,6 @@ import com.megernolep.islandeditor.domain.EditorData
 @Composable
 fun EditorScreen(vm: EditorViewModel) {
     val ctx = LocalContext.current
-    var menuOpen by rememberSaveable { mutableStateOf(true) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importFrom(uri)
@@ -75,7 +65,7 @@ fun EditorScreen(vm: EditorViewModel) {
         Header(vm)
         if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Accent, trackColor = SurfHi)
 
-        Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             MapCanvas(vm)
             ViewControls(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
             Text(
@@ -93,10 +83,6 @@ fun EditorScreen(vm: EditorViewModel) {
             )
         }
 
-        // Handle di tengah-atas menu: geser ke atas = muncul, geser ke bawah = sembunyi (atau ketuk).
-        MenuHandle(open = menuOpen, onChange = { menuOpen = it })
-        AnimatedVisibility(menuOpen, enter = expandVertically(), exit = shrinkVertically()) {
-        Column {
         AnimatedVisibility(vm.panelOpen) {
             Column(
                 Modifier.fillMaxWidth().heightIn(max = 300.dp).background(Surf)
@@ -106,8 +92,6 @@ fun EditorScreen(vm: EditorViewModel) {
 
         ModeBar(vm)
         ActionBar(vm) { importLauncher.launch(arrayOf("*/*")) }
-        }
-        }
     }
 
     Dialogs(vm)
@@ -156,7 +140,7 @@ private fun CircleBtn(label: String, active: Boolean = false, onClick: () -> Uni
 
 @Composable
 private fun ViewControls(vm: EditorViewModel, modifier: Modifier) {
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         CircleBtn("＋") { vm.zoomBy(1.4f) }
         CircleBtn("－") { vm.zoomBy(1f / 1.4f) }
         CircleBtn("⤢") { vm.fitView() }
@@ -286,29 +270,5 @@ private fun Dialogs(vm: EditorViewModel) {
                 }) { Text("Bagikan", color = TextHi) }
             },
         )
-    }
-}
-
-@Composable
-private fun MenuHandle(open: Boolean, onChange: (Boolean) -> Unit) {
-    var acc by remember { mutableFloatStateOf(0f) }
-    Box(
-        Modifier.fillMaxWidth().height(30.dp)
-            .background(Surf, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .clickable { onChange(!open) }
-            .pointerInput(open) {
-                detectVerticalDragGestures(
-                    onDragStart = { acc = 0f },
-                    onDragEnd = {
-                        if (acc < -30f) onChange(true) else if (acc > 30f) onChange(false)
-                        acc = 0f
-                    },
-                    onDragCancel = { acc = 0f },
-                    onVerticalDrag = { change, dy -> change.consume(); acc += dy },
-                )
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(Modifier.size(width = 44.dp, height = 5.dp).clip(RoundedCornerShape(50)).background(Outline))
     }
 }

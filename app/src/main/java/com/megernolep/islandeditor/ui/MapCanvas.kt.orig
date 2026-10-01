@@ -1,7 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.ui.draw.clipToBounds
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -45,7 +43,6 @@ fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .clipToBounds()   // tanpa ini gambar peta menimpa header & menu
             .background(CvBg)
             .onSizeChanged { vm.onCanvasSize(IntSize(it.width, it.height)) }
             .pointerInput(Unit) {
