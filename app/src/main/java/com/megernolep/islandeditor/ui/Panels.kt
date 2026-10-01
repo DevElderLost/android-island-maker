@@ -155,23 +155,19 @@ private fun LandmarkPanel(vm: EditorViewModel) {
         { l -> vm.setOpts { it.copy(selLandmark = l.prefab) } },
     )
     Note(o.selLandmark)
+    Note("Setelah ditaruh, objek terpilih (kotak putus-putus). Tekan LAMA ikon rotasi di pojok kotak lalu geser untuk memutar. Ketuk objek yang sudah ada untuk memilihnya lagi.", Accent2)  // rot-help-lm
 }
 
 @Composable
 private fun RailPanel(vm: EditorViewModel) {
     val o = vm.opts
-    Note("Landmark GLOBAL (kereta/jalan rusak) disimpan terpisah dan dipakai client sebagai objek panjang. Putar dengan slider.")
+    Note("Landmark GLOBAL (kereta/jalan rusak) disimpan terpisah dan dipakai client sebagai objek panjang. Putar lewat ikon rotasi di pojok kotak.")
     PickList(
         vm.railItems, { it.prefab }, o.selRail, { Color(0xFFFF6A3D) }, { vm.lmLabel(it) }, { "" },
         { l -> vm.setOpts { it.copy(selRail = l.prefab, railCustom = "") } }, height = 150,
     )
     Field(o.railCustom, { v -> vm.setOpts { it.copy(railCustom = v) } }, "…atau ketik nama prefab sendiri", Modifier.padding(top = 6.dp))
-    Section("Rotasi: ${o.railRot * 2}°")
-    Slider(
-        o.railRot.toFloat(), { v -> vm.setOpts { it.copy(railRot = v.toInt()) } }, valueRange = 0f..179f,
-        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent),
-    )
-    Chips(listOf(0 to "0°", 45 to "90°", 90 to "180°", 135 to "270°"), o.railRot) { v -> vm.setOpts { it.copy(railRot = v) } }
+    Note("Setelah ditaruh, objek terpilih (kotak putus-putus). Tekan LAMA ikon rotasi di pojok kotak lalu geser untuk memutar. Ketuk objek yang sudah ada untuk memilihnya lagi.", Accent2)  // rot-help-rail
 }
 
 // ---------------------------------------------------------------- SPAWN / RAKIT
@@ -242,12 +238,7 @@ private fun DecorPanel(vm: EditorViewModel) {
         vm.decorItems(), { it.id }, o.selDecor, { Color(EditorData.dietColor[it.diet] ?: 0xFFFFFFFF.toInt()) },
         { vm.decorName(it) }, { "#${it.id}" }, { a -> vm.setOpts { it.copy(selDecor = a.id) } },
     )
-    Section("Arah hadap: ${o.decRot}°")
-    Slider(
-        o.decRot.toFloat(), { v -> vm.setOpts { it.copy(decRot = v.toInt()) } }, valueRange = 0f..359f,
-        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent),
-    )
-    Chips(listOf(0 to "0°", 90 to "90°", 180 to "180°", 270 to "270°"), o.decRot) { v -> vm.setOpts { it.copy(decRot = v) } }
+    Note("Setelah ditaruh, objek terpilih (kotak putus-putus). Tekan LAMA ikon rotasi di pojok kotak lalu geser untuk memutar. Ketuk objek yang sudah ada untuk memilihnya lagi.", Accent2)  // rot-help-decor
 }
 
 // ---------------------------------------------------------------- NPC

@@ -77,6 +77,7 @@ fun EditorScreen(vm: EditorViewModel) {
 
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
             MapCanvas(vm)
+            CanvasToolbar(vm, onImport = { importLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
             ViewControls(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
             Text(
                 "${vm.doc.naturals.size} natural · ${vm.doc.herds.size} herd · ${vm.doc.buildings.size} bangunan",
@@ -157,10 +158,11 @@ private fun CircleBtn(label: String, active: Boolean = false, onClick: () -> Uni
 @Composable
 private fun ViewControls(vm: EditorViewModel, modifier: Modifier) {
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        CircleBtn("＋") { vm.zoomBy(1.4f) }
-        CircleBtn("－") { vm.zoomBy(1f / 1.4f) }
-        CircleBtn("⤢") { vm.fitView() }
-        CircleBtn("↻") { vm.rotateBy(0.2618f) }
+        IconBtn(IconKind.ZOOM_IN) { vm.zoomBy(1.4f) }
+        IconBtn(IconKind.ZOOM_OUT) { vm.zoomBy(1f / 1.4f) }
+        IconBtn(IconKind.FIT) { vm.fitView() }
+        IconBtn(IconKind.ROT_LEFT) { vm.rotateBy(-0.2618f) }    // 15° berlawanan arah jarum jam
+        IconBtn(IconKind.ROT_RIGHT) { vm.rotateBy(0.2618f) }    // 15° searah jarum jam
         CircleBtn("🧭", vm.gameView) { vm.toggleGameView() }
         CircleBtn("✋", vm.panMode) { vm.panMode = !vm.panMode }
     }
@@ -192,14 +194,8 @@ private fun ModeBar(vm: EditorViewModel) {
 @Composable
 private fun ActionBar(vm: EditorViewModel, onImport: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(Surf).padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            item { SmallBtn("↶ Undo", enabled = vm.canUndo) { vm.undo() } }
-            item { SmallBtn("↔ Flip H") { vm.flip(true) } }
-            item { SmallBtn("↕ Flip V") { vm.flip(false) } }
-            item { SmallBtn("📂 Impor spec") { onImport() } }
-            item { SmallBtn("🗑 Kosongkan", danger = true) { vm.clearPrompt = true } }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBtn(IconKind.TRASH, tint = Danger) { vm.clearPrompt = true }
             OutlinedButton(
                 onClick = { vm.requestExport(ExportKind.SPEC) }, enabled = !vm.busy,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Outline),
@@ -310,5 +306,17 @@ private fun MenuHandle(open: Boolean, onChange: (Boolean) -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(width = 44.dp, height = 5.dp).clip(RoundedCornerShape(50)).background(Outline))
+    }
+}
+
+/** Undo · Redo · Flip H · Flip V · Impor — ikon bulat berbaris horizontal di kiri atas kanvas. */
+@Composable
+private fun CanvasToolbar(vm: EditorViewModel, onImport: () -> Unit, modifier: Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IconBtn(IconKind.UNDO, enabled = vm.canUndo) { vm.undo() }
+        IconBtn(IconKind.REDO, enabled = vm.canRedo) { vm.redo() }
+        IconBtn(IconKind.FLIP_H) { vm.flip(true) }
+        IconBtn(IconKind.FLIP_V) { vm.flip(false) }
+        IconBtn(IconKind.IMPORT) { onImport() }
     }
 }

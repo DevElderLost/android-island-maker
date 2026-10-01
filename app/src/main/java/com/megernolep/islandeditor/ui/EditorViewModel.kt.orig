@@ -1,9 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.roundToInt
-
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
@@ -108,168 +104,25 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private fun bump() { refreshBitmap(); rev++ }
 
     // ---------------- undo ----------------
-    // ---------------- seleksi & rotasi objek (landmark / kereta / hewan objek) ----------------
-    var selection by mutableStateOf<Sel?>(null)
-        private set
-    /** Derajat saat sedang memutar (label di kanvas); null kalau tidak sedang memutar. */
-    var rotLabel by mutableStateOf<Float?>(null)
-        private set
-    private var rotating = false
-    private var rotStartAngle = 0f
-    private var rotBase = 0f
-    private var rotSnap: Doc? = null
-    private var rotPushed = false
-
-    fun selectedPose(): Pose? {
-        val s = selection ?: return null
-        return when (s.kind) {
-            SelKind.LANDMARK -> doc.landmarks.getOrNull(s.index)?.let { l ->
-                val g = EditorData.isGlobalPrefab(l.prefab)
-                Pose(l.x, l.y, (l.rotate * 2).toFloat(), if (g) 3f else 4f, if (g) 7f else 4f)
-            }
-            SelKind.DECOR -> doc.decor.getOrNull(s.index)?.let { d -> Pose(d.x, d.y, d.yaw.toFloat(), 3f, 3f) }
-        }
-    }
-
-    fun mapToScreen(m: Offset): Offset {
-        val vw = view
-        val r = rotV(m.x * vw.k, m.y * vw.k, vw.rot)
-        return Offset(vw.tx + r.x, vw.ty + r.y)
-    }
-
-    fun hitRotateHandle(p: Offset, radiusPx: Float): Boolean {
-        val pose = selectedPose() ?: return false
-        return (p - mapToScreen(frameOf(pose, view.k).handle)).getDistance() <= radiusPx
-    }
-
-    private fun angleAt(screen: Offset, pose: Pose): Float {
-        val m = screenToMap(screen)
-        val dx = m.x - (pose.x + 0.5f)
-        val dy = m.y - (H - pose.y - 0.5f)
-        return Math.toDegrees(atan2(dx.toDouble(), (-dy).toDouble())).toFloat()
-    }
-
-    private fun snapDeg(d: Float): Float {
-        val n = (d / 45f).roundToInt() * 45f
-        return if (abs(d - n) < 3f) n else d
-    }
-
-    fun rotateBegin(p: Offset) {
-        val pose = selectedPose() ?: return
-        rotating = true
-        rotSnap = doc.deepCopy()
-        rotPushed = false
-        rotBase = pose.deg
-        rotStartAngle = angleAt(p, pose)
-        rotLabel = pose.deg
-    }
-
-    fun rotateMove(p: Offset) {
-        if (!rotating) return
-        val s = selection ?: return
-        val pose = selectedPose() ?: return
-        val raw = rotBase + (angleAt(p, pose) - rotStartAngle)
-        applyRotation(s, snapDeg(((raw % 360f) + 360f) % 360f))
-    }
-
-    fun rotateEnd() { rotating = false; rotLabel = null; rotSnap = null }
-
-    private fun prepareRotUndo() {
-        if (!rotPushed) { rotSnap?.let { pushUndo(it) }; rotPushed = true }
-    }
-
-    private fun applyRotation(s: Sel, deg: Float) {
-        when (s.kind) {
-            SelKind.LANDMARK -> {
-                val l = doc.landmarks.getOrNull(s.index) ?: return
-                val r = ((Math.round(deg / 2f) % 180) + 180) % 180      // yaw = rotate * 2°
-                if (r == l.rotate) return
-                prepareRotUndo()
-                doc = doc.copy(landmarks = doc.landmarks.toMutableList().also { it[s.index] = l.copy(rotate = r) })
-                if (EditorData.isGlobalPrefab(l.prefab)) opts = opts.copy(railRot = r)   // ingat untuk objek berikutnya
-                rotLabel = r * 2f
-            }
-            SelKind.DECOR -> {
-                val d = doc.decor.getOrNull(s.index) ?: return
-                val r = ((Math.round(deg) % 360) + 360) % 360
-                if (r == d.yaw) return
-                prepareRotUndo()
-                doc = doc.copy(decor = doc.decor.toMutableList().also { it[s.index] = d.copy(yaw = r) })
-                opts = opts.copy(decRot = r)
-                rotLabel = r.toFloat()
-            }
-        }
-        rev++
-    }
-
-    private fun nearest(cands: List<Triple<Int, Int, Int>>, x: Int, y: Int): Int {
-        var best = -1
-        var bd = 7                       // jarak kuadrat < 7  (~2,5 tile)
-        for ((i, px, py) in cands) {
-            val d = (px - x) * (px - x) + (py - y) * (py - y)
-            if (d < bd) { bd = d; best = i }
-        }
-        return best
-    }
-
-    /** Ketuk dekat objek yang ada -> pilih (false = dokumen tidak berubah). Kalau tidak -> taruh baru & pilih (true). */
-    private fun placeOrSelectLandmark(x: Int, y: Int, prefab: String, rot: Int, global: Boolean): Boolean {
-        val cands = doc.landmarks.mapIndexedNotNull { i, l ->
-            if (EditorData.isGlobalPrefab(l.prefab) == global) Triple(i, l.x, l.y) else null
-        }
-        val hit = nearest(cands, x, y)
-        if (hit >= 0) { selection = Sel(SelKind.LANDMARK, hit); return false }
-        val rotate = if (global) ((rot % 180) + 180) % 180 else 0
-        doc = doc.copy(landmarks = doc.landmarks + Landmark(x, y, prefab, rotate = rotate))
-        selection = Sel(SelKind.LANDMARK, doc.landmarks.lastIndex)
-        return true
-    }
-
-    private fun placeOrSelectDecor(x: Int, y: Int, type: Int, yaw: Int): Boolean {
-        val hit = nearest(doc.decor.mapIndexed { i, d -> Triple(i, d.x, d.y) }, x, y)
-        if (hit >= 0) { selection = Sel(SelKind.DECOR, hit); return false }
-        doc = doc.copy(decor = doc.decor + Decor(x, y, type, yaw))
-        selection = Sel(SelKind.DECOR, doc.decor.lastIndex)
-        return true
-    }
-
     private val undoStack = ArrayList<Doc>()
-    private val redoStack = ArrayList<Doc>()
-    var canRedo by mutableStateOf(false)
-        private set
 
     private fun pushUndo(snapshot: Doc) {
         undoStack.add(snapshot)
         if (undoStack.size > 40) undoStack.removeAt(0)
         canUndo = true
-        redoStack.clear(); canRedo = false   // REDO_CLEAR
     }
 
     fun undo() {
         if (undoStack.isEmpty()) return
-        redoStack.add(doc.deepCopy()); canRedo = true
         doc = undoStack.removeAt(undoStack.lastIndex)
-        selection = null   // SEL_UNDO
         trigPending = null
         canUndo = undoStack.isNotEmpty()
-        bump()
-    }
-
-    fun redo() {
-        if (redoStack.isEmpty()) return
-        undoStack.add(doc.deepCopy())
-        doc = redoStack.removeAt(redoStack.lastIndex)
-        selection = null
-        trigPending = null
-        canUndo = true
-        canRedo = redoStack.isNotEmpty()
         bump()
     }
 
     /** Edit diskret (satu langkah undo). */
     private fun edit(block: (Doc) -> Doc) {
         pushUndo(doc.deepCopy())
-        selection = null   // SEL_EDIT
         doc = block(doc)
         bump()
     }
@@ -313,7 +166,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- mode & opts ----------------
     fun onModeTap(m: Mode) {
         if (mode == m) { panelOpen = !panelOpen; return }
-        mode = m; panelOpen = true; selection = null   // SEL_MODE
+        mode = m; panelOpen = true
         trigPending = null; hover = null; hint = ""
     }
 
@@ -611,7 +464,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         when (mode) {
             Mode.BIOME -> { Ops.paintBiome(doc, t.x, t.y, o.brush, o.selBiome, o.collidable, o.notPlant); mark(); bump() }
             Mode.ROCK -> { Ops.paintRock(doc, t.x, t.y, o.rockSize, o.rockRough, o.rockLandOnly, o.rockErase); mark(); bump() }
-            Mode.ERASE -> { selection = null; doc = Ops.eraseAt(doc, catalog, t.x, t.y, o.eraseSize, eraseOpts()); mark(); bump() }
+            Mode.ERASE -> { doc = Ops.eraseAt(doc, catalog, t.x, t.y, o.eraseSize, eraseOpts()); mark(); bump() }
             Mode.THORN -> thorn(t.x, t.y)
             Mode.TRIGGER -> if (o.trigTool == "brush") trigStroke(t.x, t.y)
             Mode.NATURAL -> if (Math.random() * o.sprayDensity < 1) {
@@ -626,7 +479,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Sentuhan kedua muncul: batalkan goresan (undo kalau baru saja mulai). */
     fun strokeCancel(early: Boolean) {
         if (painting) {
-            if (early && pushed) { undo(); redoStack.clear(); canRedo = false }
+            if (early && pushed) undo()
             painting = false; snap = null
         }
     }
@@ -659,7 +512,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         when (mode) {
             Mode.BIOME -> { Ops.paintBiome(doc, x, y, o.brush, o.selBiome, o.collidable, o.notPlant); mark(); bump(); return }
             Mode.ROCK -> { Ops.paintRock(doc, x, y, o.rockSize, o.rockRough, o.rockLandOnly, o.rockErase); mark(); bump(); return }
-            Mode.ERASE -> { selection = null; doc = Ops.eraseAt(doc, catalog, x, y, o.eraseSize, eraseOpts()); mark(); bump(); return }
+            Mode.ERASE -> { doc = Ops.eraseAt(doc, catalog, x, y, o.eraseSize, eraseOpts()); mark(); bump(); return }
             Mode.THORN -> { thorn(x, y); return }
             Mode.TRIGGER -> {
                 val flow = trigCurFlow()
@@ -671,18 +524,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 return
             }
             Mode.NATURAL -> doc = doc.copy(naturals = doc.naturals + Natural(x, y, o.selNatural))
-            Mode.LANDMARK -> changed = placeOrSelectLandmark(x, y, o.selLandmark, 0, false)
+            Mode.LANDMARK -> doc = doc.copy(landmarks = doc.landmarks + Landmark(x, y, o.selLandmark))
             Mode.PORT -> doc = doc.copy(ports = listOf(Pt(x, y)))   // MVP: cuma 1 dermaga
             Mode.DECOR ->
                 if (doc.code(x, y) >= 11) changed = reject("⛔ Ditolak: hewan objek harus di darat/pantai, bukan air.")
-                else { hint = ""; changed = placeOrSelectDecor(x, y, o.selDecor, o.decRot) }
+                else { hint = ""; doc = doc.copy(decor = doc.decor + Decor(x, y, o.selDecor, o.decRot)) }
             Mode.NPC ->
                 if (doc.code(x, y) >= 11) changed = reject("⛔ Ditolak: NPC harus di darat/pantai, bukan air.")
                 else { hint = ""; doc = Ops.putNpc(doc, o.selNpc, x, y, o.npcRadius.coerceIn(0, 20)) }
             Mode.RAIL -> {
                 val pf = railPrefab()
                 if (pf.isEmpty()) changed = reject("⛔ Pilih prefab dulu.")
-                else changed = placeOrSelectLandmark(x, y, pf, o.railRot, true)
+                else doc = doc.copy(landmarks = doc.landmarks + Landmark(x, y, pf, rotate = o.railRot.coerceIn(0, 255)))
             }
             Mode.RAFT ->
                 if (x + 3 >= W || y + 3 >= H || Ops.raftCheck(doc, x, y).core > 0) changed = reject("⛔ Ditolak: area 4x4 rakit harus di darat dan di dalam peta.")
@@ -777,7 +630,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     SpecCodec.decode(JSONObject(text), catalog)
                 }
                 pushUndo(doc.deepCopy())
-                selection = null   // SEL_IMPORT
                 doc = imported
                 trigPending = null
                 applyTypeUi()

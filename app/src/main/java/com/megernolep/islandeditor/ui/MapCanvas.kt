@@ -1,5 +1,14 @@
 package com.megernolep.islandeditor.ui
 
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
+
 import androidx.compose.ui.draw.clipToBounds
 
 import androidx.compose.foundation.Canvas
@@ -42,6 +51,7 @@ private fun tileTop(y: Int) = (H - 1 - y).toFloat()
 
 @Composable
 fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
+    val haptic = LocalHapticFeedback.current
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -51,6 +61,28 @@ fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (vm.hitRotateHandle(down.position, 30.dp.toPx())) {
+                        // Pegangan rotasi: tekan lama dulu (cegah putar tak sengaja), lalu geser untuk memutar.
+                        val tooEarly = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                val ch = ev.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull
+                                if (!ch.pressed) return@withTimeoutOrNull
+                                if ((ch.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull
+                            }
+                        }
+                        if (tooEarly == null) {      // timeout tercapai = tekan lama berhasil
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            vm.rotateBegin(down.position)
+                            do {
+                                val ev = awaitPointerEvent()
+                                val ch = ev.changes.firstOrNull { it.id == down.id }
+                                if (ch != null && ch.pressed) { vm.rotateMove(ch.position); ch.consume() }
+                            } while (ch != null && ch.pressed)
+                            vm.rotateEnd()
+                        }
+                        return@awaitEachGesture
+                    }
                     val t0 = System.currentTimeMillis()
                     var multi = false
                     if (!vm.panMode) vm.strokeBegin(down.position)
@@ -91,6 +123,7 @@ fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
             drawImage(vm.image, dstSize = IntSize(W, H), filterQuality = FilterQuality.None)
             drawOverlays(vm, doc, ::px)
         }
+        vm.selectedPose()?.let { drawSelection(vm, it) }   // lapisan layar: ukuran tetap
     }
 }
 
@@ -201,5 +234,60 @@ private fun DrawScope.drawOverlays(vm: EditorViewModel, doc: Doc, px: (Float) ->
         box(s.x - 4, s.y - 4, s.x + 4, s.y + 4, null, col, true, px)
         dot(s.x, s.y, col, 3f, true, px)
         drawCircle(Color.Black, px(2f), Offset(mx(s.x), my(s.y)))
+    }
+}
+
+/** Kotak seleksi putus-putus + ikon rotasi di pojok depan-kanan. Digambar di ruang layar (ukuran konstan). */
+private fun DrawScope.drawSelection(vm: EditorViewModel, pose: Pose) {
+    val fr = frameOf(pose, vm.view.k)
+    fun s(a: Float, b: Float): Offset = vm.mapToScreen(fr.pt(a, b))
+
+    val c1 = s(fr.hl, -fr.hw); val c2 = s(fr.hl, fr.hw)
+    val c3 = s(-fr.hl, fr.hw); val c4 = s(-fr.hl, -fr.hw)
+    val box = Path().apply {
+        moveTo(c1.x, c1.y); lineTo(c2.x, c2.y); lineTo(c3.x, c3.y); lineTo(c4.x, c4.y); close()
+    }
+    drawPath(box, Color.White.copy(alpha = .07f))
+    drawPath(
+        box, Color.White,
+        style = Stroke(1.6.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 6.dp.toPx()))),
+    )
+    // arah depan objek
+    drawLine(Accent, s(0f, 0f), s(fr.hl, 0f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+
+    // pegangan rotasi
+    val h = c2
+    val ring = if (vm.rotLabel != null) Accent else Color.White
+    drawCircle(Bg, 15.dp.toPx(), h)
+    drawCircle(ring, 15.dp.toPx(), h, style = Stroke(2.dp.toPx()))
+    val r = 7.dp.toPx()
+    drawArc(
+        color = ring, startAngle = -60f, sweepAngle = 270f, useCenter = false,
+        topLeft = Offset(h.x - r, h.y - r), size = Size(2 * r, 2 * r),
+        style = Stroke(2.dp.toPx(), cap = StrokeCap.Round),
+    )
+    // kepala panah di ujung busur (sudut 210°, arah singgung searah jarum jam)
+    val phi = Math.toRadians(210.0).toFloat()
+    val e = Offset(h.x + r * cos(phi), h.y + r * sin(phi))
+    val tg = Offset(-sin(phi), cos(phi)); val nm = Offset(cos(phi), sin(phi))
+    val a = 4.dp.toPx()
+    val head = Path().apply {
+        moveTo(e.x + tg.x * 5.dp.toPx(), e.y + tg.y * 5.dp.toPx())
+        lineTo(e.x - tg.x * 1.dp.toPx() + nm.x * a, e.y - tg.y * 1.dp.toPx() + nm.y * a)
+        lineTo(e.x - tg.x * 1.dp.toPx() - nm.x * a, e.y - tg.y * 1.dp.toPx() - nm.y * a)
+        close()
+    }
+    drawPath(head, ring)
+
+    // label derajat saat memutar
+    vm.rotLabel?.let { deg ->
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 14.sp.toPx()
+            textAlign = android.graphics.Paint.Align.CENTER
+            isAntiAlias = true
+            setShadowLayer(4.dp.toPx(), 0f, 0f, android.graphics.Color.BLACK)
+        }
+        drawContext.canvas.nativeCanvas.drawText("${deg.roundToInt()}°", h.x, h.y - 24.dp.toPx(), paint)
     }
 }
