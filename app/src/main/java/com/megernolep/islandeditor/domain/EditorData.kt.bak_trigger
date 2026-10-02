@@ -131,13 +131,6 @@ object EditorData {
         trig("fruits", "Area buah / pohon kurma (trigger_gather_fruits)", "trigger_gather_fruits", 0xFFFF8A3D),
         trig("brachio", "Dekat brachiosaurus (trigger_arrive_brachio)", "trigger_arrive_brachio", 0xFF37D7FF),
         trig("meet", "Bertemu brachiosaurus (trigger_meet_brachio)", "trigger_meet_brachio", 0xFF5CFF7A),
-        trig("lake", "Dekat danau (trigger_arrive_lake)", "trigger_arrive_lake", 0xFF4D9CFF),
-        trig("brachio_snd1", "Suara brachiosaurus 1 (trigger_sound_brachio_01)", "trigger_sound_brachio_01", 0xFF9AE6FF),
-        trig("brachio_snd2", "Suara brachiosaurus 2 (trigger_sound_brachio_02)", "trigger_sound_brachio_02", 0xFF6FC7E8),
-        // Alur istirahat di api unggun (Charlie): letakkan SEBELUM api unggun (fatigue) lalu di sekitar api unggun (bonfire).
-        trig("fatigue", "Mulai lelah, sebelum api unggun (trigger_fatigue_full)", "trigger_fatigue_full", 0xFFFF9F43),
-        trig("bonfire", "Area api unggun / Charlie (trigger_arrive_bonfire)", "trigger_arrive_bonfire", 0xFFFF6B35),
-        trig("beach", "Pantai, sebelum rakit (trigger_arrive_beach)", "trigger_arrive_beach", 0xFFF3E37A),
         trig("shipyard", "Area rakit (trigger_arrive_shipyard)", "trigger_arrive_shipyard", 0xFFC86BD8),
         trig("todo_pia", "SELESAIKAN misi: ikuti anjing (follow_pia)", "todo:follow_pia", 0xFFFFFFFF),
         trig("todo_north", "SELESAIKAN misi: ke utara (move_northward)", "todo:move_northward", 0xFFB4FF6B),
