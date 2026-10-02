@@ -109,8 +109,17 @@ object EditorData {
         bot("_924s", "Sub-komite 924", 13, true, 3), bot("_628s", "Sub-komite 628", 14, false, 3),
         bot("_415s", "Sub-komite 415", 15, true, 3), bot("hauata", "Hauata", 16, true, 6),
         bot("maki", "Maki", 17, false, 6), bot("josipovic", "Josipovic", 18, true, 6),
-        bot("charlie", "Charlie", 19, true, 7, true), bot("d383", "Agen D383", 20, true, 5, true),
+        bot("charlie", "Charlie", 19, false, 7, true), bot("d383", "Agen D383", 20, true, 5, true),
     )
+    /** NPC dengan dialog skrip/quest (K, T, Charlie): teks chat custom tidak ditawarkan untuk mereka. */
+    val npcScriptedIds: Set<String> = setOf("k", "charlie")
+    fun npcAllowsLines(id: String): Boolean {
+        val d = npcById[id] ?: return false
+        return d.kind == "bot" && id !in npcScriptedIds
+    }
+    const val NPC_MAX_LINES = 8
+    const val NPC_MAX_LINE_LEN = 80
+
     val npcAll: List<NpcDef> = npcStory + npcBots
     val npcById: Map<String, NpcDef> = npcAll.associateBy { it.id }
 

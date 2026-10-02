@@ -19,7 +19,8 @@ data class Landmark(
 )
 data class Herd(val group: String, val x: Int, val y: Int, val entityType: Int, val level: Int)
 data class Decor(val x: Int, val y: Int, val entityType: Int, val yaw: Int)
-data class Npc(val id: String, val kind: String, val x: Int, val y: Int, val epic: Int = 0, val radius: Int = 0)
+/** [lines] = teks chat custom di atas kepala NPC bot (satu elemen = satu bubble); kosong = tidak ada. */
+data class Npc(val id: String, val kind: String, val x: Int, val y: Int, val epic: Int = 0, val radius: Int = 0, val lines: List<String> = emptyList())
 data class Building(val x: Int, val y: Int, val entityType: Int)
 data class TrigZone(val flow: String, val exit: String, val color: Int, val cells: Set<Int>)
 

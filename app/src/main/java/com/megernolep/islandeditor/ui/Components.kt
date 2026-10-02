@@ -163,10 +163,10 @@ fun <T> Dropdown(value: String, options: List<Pair<T, String>>, onPick: (T) -> U
 @Composable
 fun Field(
     value: String, onChange: (String) -> Unit, placeholder: String = "",
-    modifier: Modifier = Modifier, number: Boolean = false,
+    modifier: Modifier = Modifier, number: Boolean = false, multiline: Boolean = false,
 ) {
     BasicTextField(
-        value = value, onValueChange = onChange, singleLine = true,
+        value = value, onValueChange = onChange, singleLine = !multiline, maxLines = if (multiline) 8 else 1,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextHi),
         cursorBrush = SolidColor(Accent),
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Text),

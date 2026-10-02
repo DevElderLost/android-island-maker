@@ -155,9 +155,21 @@ object Ops {
     // ---------------- NPC ----------------
     fun putNpc(doc: Doc, id: String, x: Int, y: Int, radius: Int): Doc {
         val info = EditorData.npcById[id] ?: return doc
-        val n = if (info.kind == "story") Npc(id, "story", x, y, epic = info.epic) else Npc(id, "bot", x, y, radius = radius)
+        val oldLines = doc.npcs.firstOrNull { it.id == id }?.lines ?: emptyList()   // pindah NPC tidak menghapus teks chat-nya
+        val n = if (info.kind == "story") Npc(id, "story", x, y, epic = info.epic) else Npc(id, "bot", x, y, radius = radius, lines = oldLines)
         return doc.copy(npcs = doc.npcs.filter { it.id != id } + n)
     }
+
+    /** Set teks chat custom NPC bot [id] (hanya NPC yang sudah ditaruh & boleh punya teks). */
+    fun setNpcLines(doc: Doc, id: String, lines: List<String>): Doc {
+        if (!EditorData.npcAllowsLines(id)) return doc
+        return doc.copy(npcs = doc.npcs.map { if (it.id == id) it.copy(lines = lines) else it })
+    }
+
+    /** Bersihkan untuk disimpan: trim, buang baris kosong, batasi jumlah & panjang. */
+    fun cleanLines(lines: List<String>): List<String> =
+        lines.map { it.trim() }.filter { it.isNotEmpty() }
+            .map { it.take(EditorData.NPC_MAX_LINE_LEN) }.take(EditorData.NPC_MAX_LINES)
 
     /** Taruh K & T di posisi tetap level [lv] (0-based). Hasil: (doc, nama NPC yang jatuh di air). */
     fun storyPreset(doc: Doc, lv: Int): Pair<Doc, List<String>> {

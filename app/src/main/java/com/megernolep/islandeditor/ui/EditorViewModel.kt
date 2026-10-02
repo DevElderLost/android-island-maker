@@ -727,6 +727,16 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         return EditorData.npcAll.filter { q.isEmpty() || matchQ(it.name + " " + it.id, q) }
     }
 
+    /** Teks chat custom NPC [id] sebagai satu string (satu baris = satu bubble); "" bila belum ditaruh. */
+    fun npcLinesText(id: String): String = doc.npcs.firstOrNull { it.id == id }?.lines?.joinToString("\n") ?: ""
+    fun npcPlaced(id: String): Boolean = doc.npcs.any { it.id == id }
+
+    /** Dipanggil tiap ketikan: tanpa undo-snapshot (supaya tumpukan undo tidak penuh), baris kosong sementara dipertahankan. */
+    fun setNpcLinesText(id: String, text: String) {
+        doc = Ops.setNpcLines(doc, id, text.split("\n"))
+        rev++
+    }
+
     fun pickNpc(n: NpcDef) { opts = opts.copy(selNpc = n.id, npcRadius = if (n.kind == "story") opts.npcRadius else n.radius) }
 
     fun placeStoryPreset() {

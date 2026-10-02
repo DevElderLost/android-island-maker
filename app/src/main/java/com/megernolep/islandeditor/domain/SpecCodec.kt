@@ -66,6 +66,10 @@ object SpecCodec {
                 JSONObject().put("id", n.id).put("kind", "bot").put("index", info?.idx ?: 0)
                     .put("x", n.x).put("y", n.y).put("radius", n.radius).put("name", info?.name ?: n.id)
                     .put("prefab", info?.prefab ?: JSONObject.NULL).put("male", info?.male ?: false)
+                    .also { o ->
+                        val ls = if (EditorData.npcAllowsLines(n.id)) Ops.cleanLines(n.lines) else emptyList()
+                        if (ls.isNotEmpty()) o.put("lines", JSONArray(ls))
+                    }
             }
         }))
         spec.put("static_animals", JSONArray(doc.decor.map { d ->
@@ -149,7 +153,10 @@ object SpecCodec {
         val npcs = objs("npcs").filter { it.hasXY() && EditorData.npcById.containsKey(it.optString("id")) }.map { n ->
             val info = EditorData.npcById.getValue(n.optString("id"))
             if (info.kind == "story") Npc(info.id, "story", n.optInt("x"), n.optInt("y"), epic = info.epic)
-            else Npc(info.id, "bot", n.optInt("x"), n.optInt("y"), radius = n.optInt("radius", 0))
+            else Npc(
+                info.id, "bot", n.optInt("x"), n.optInt("y"), radius = n.optInt("radius", 0),
+                lines = n.optJSONArray("lines")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
+            )
         }
 
         val herds = objs("herds").filter { it.hasXY() }.map { h ->

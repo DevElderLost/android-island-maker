@@ -260,6 +260,21 @@ private fun NpcPanel(vm: EditorViewModel) {
         Section("Radius jelajah (tile)")
         Stepper(o.npcRadius, 0, 20) { v -> vm.setOpts { it.copy(npcRadius = v) } }
     }
+    if (def != null && EditorData.npcAllowsLines(def.id)) {
+        Section("Teks chat di atas kepala NPC")
+        if (!vm.npcPlaced(def.id)) {
+            Note("Taruh ${def.name} di peta dulu, lalu isi teksnya di sini.")
+        } else {
+            Field(
+                vm.npcLinesText(def.id), { v -> vm.setNpcLinesText(def.id, v) },
+                "Satu baris = satu kalimat (maks ${EditorData.NPC_MAX_LINES} baris, ${EditorData.NPC_MAX_LINE_LEN} huruf)",
+                Modifier.padding(bottom = 4.dp), multiline = true,
+            )
+            Note("Muncul sebagai bubble chat saat pemain dekat atau mengetuk NPC. Kosongkan untuk mematikan.")
+        }
+    } else if (def != null) {
+        Note("${def.name}: dialog diatur skrip cerita/quest, teks custom tidak tersedia.")
+    }
     Section("Preset K & T (posisi tetap tutorial)")
     IntChips(listOf(1, 2, 3, 4, 5), o.npcPresetLv, "") { v -> vm.setOpts { it.copy(npcPresetLv = v) } }
     OutlinedButton(onClick = { vm.placeStoryPreset() }, modifier = Modifier.padding(top = 6.dp)) { Text("Taruh K & T level ${o.npcPresetLv}") }
