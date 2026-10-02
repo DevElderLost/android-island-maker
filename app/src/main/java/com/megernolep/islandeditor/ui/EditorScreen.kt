@@ -1,5 +1,8 @@
 package com.megernolep.islandeditor.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
+
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -66,6 +69,9 @@ fun EditorScreen(vm: EditorViewModel) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importFrom(uri)
     }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.addReferenceImage(uri)
+    }
 
     LaunchedEffect(vm.toast) {
         vm.toast?.let { Toast.makeText(ctx, it, Toast.LENGTH_SHORT).show(); vm.toast = null }
@@ -77,7 +83,16 @@ fun EditorScreen(vm: EditorViewModel) {
 
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
             MapCanvas(vm)
-            CanvasToolbar(vm, onImport = { importLauncher.launch(arrayOf("*/*")) }, modifier = Modifier.align(Alignment.TopStart).padding(8.dp))
+            CanvasToolbar(
+                vm, onImport = { importLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 8.dp, end = 64.dp),
+            )
+            if (vm.layersOpen) {
+                LayersPanel(
+                    vm, onAddImage = { imagePicker.launch(arrayOf("image/*")) },
+                    modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 56.dp),
+                )
+            }
             ViewControls(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
             Text(
                 "${vm.doc.naturals.size} natural · ${vm.doc.herds.size} herd · ${vm.doc.buildings.size} bangunan",
@@ -121,7 +136,9 @@ private fun Header(vm: EditorViewModel) {
     val d = vm.doc
     Column(Modifier.fillMaxWidth().background(Surf).padding(horizontal = 12.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("🏝️ Island Editor", fontSize = 16.sp, color = Accent, modifier = Modifier.weight(1f))
+            val act = LocalContext.current as? android.app.Activity
+            IconBtn(IconKind.BACK) { act?.finish() }
+            Text("  " + vm.projectTitle(), fontSize = 16.sp, color = Accent, maxLines = 1, modifier = Modifier.weight(1f))
             Text(if (open) "Sembunyikan ▴" else "Info pulau ▾", color = Muted, fontSize = 12.sp, modifier = Modifier.clickable { open = !open }.padding(4.dp))
         }
         AnimatedVisibility(open) {
@@ -312,11 +329,15 @@ private fun MenuHandle(open: Boolean, onChange: (Boolean) -> Unit) {
 /** Undo · Redo · Flip H · Flip V · Impor — ikon bulat berbaris horizontal di kiri atas kanvas. */
 @Composable
 private fun CanvasToolbar(vm: EditorViewModel, onImport: () -> Unit, modifier: Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         IconBtn(IconKind.UNDO, enabled = vm.canUndo) { vm.undo() }
         IconBtn(IconKind.REDO, enabled = vm.canRedo) { vm.redo() }
         IconBtn(IconKind.FLIP_H) { vm.flip(true) }
         IconBtn(IconKind.FLIP_V) { vm.flip(false) }
         IconBtn(IconKind.IMPORT) { onImport() }
+        Box(Modifier.width(1.dp).height(40.dp).background(Outline))
+        IconBtn(IconKind.BRUSH, active = vm.mode != Mode.ERASE) { vm.selectBrush() }
+        IconBtn(IconKind.ERASER, active = vm.mode == Mode.ERASE) { vm.selectEraser() }
+        IconBtn(IconKind.LAYERS, active = vm.layersOpen) { vm.layersOpen = !vm.layersOpen }
     }
 }

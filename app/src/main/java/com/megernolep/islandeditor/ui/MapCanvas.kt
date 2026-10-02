@@ -61,6 +61,25 @@ fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    if (vm.layerEditing && vm.selectedLayer()?.kind == LayerKind.IMAGE) {
+                        // Mode atur gambar referensi: 1 jari = geser, 2 jari = skala + putar (bukan menggambar).
+                        do {
+                            val event = awaitPointerEvent()
+                            val pressed = event.changes.filter { it.pressed }
+                            if (pressed.size >= 2) {
+                                vm.layerTransform(
+                                    event.calculateCentroid(), event.calculatePan(),
+                                    event.calculateZoom(), event.calculateRotation(),
+                                )
+                                event.changes.forEach { it.consume() }
+                            } else if (pressed.size == 1) {
+                                vm.layerPan(pressed[0].positionChange())
+                                pressed[0].consume()
+                            }
+                        } while (event.changes.any { it.pressed && !it.changedToUp() })
+                        vm.layersChanged()
+                        return@awaitEachGesture
+                    }
                     if (vm.hitRotateHandle(down.position, 30.dp.toPx())) {
                         // Pegangan rotasi: tekan lama dulu (cegah putar tak sengaja), lalu geser untuk memutar.
                         val tooEarly = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -120,7 +139,7 @@ fun MapCanvas(vm: EditorViewModel, modifier: Modifier = Modifier) {
             rotate(degrees = v.rot * 180f / PI.toFloat(), pivot = Offset.Zero)
             scale(k, k, pivot = Offset.Zero)
         }) {
-            drawImage(vm.image, dstSize = IntSize(W, H), filterQuality = FilterQuality.None)
+            drawLayers(vm, ::px)   // layer: bawah -> atas, lalu overlay objek di atasnya
             drawOverlays(vm, doc, ::px)
         }
         vm.selectedPose()?.let { drawSelection(vm, it) }   // lapisan layar: ukuran tetap
@@ -290,4 +309,26 @@ private fun DrawScope.drawSelection(vm: EditorViewModel, pose: Pose) {
         }
         drawContext.canvas.nativeCanvas.drawText("${deg.roundToInt()}°", h.x, h.y - 24.dp.toPx(), paint)
     }
+}
+
+/** Layer dari bawah ke atas. Gambar referensi memakai koordinat peta (pusat, lebar dalam tile, rotasi). */
+private fun DrawScope.drawLayers(vm: EditorViewModel, px: (Float) -> Float) {
+    for (l in vm.layers) {
+        if (!l.visible || l.opacity <= 0f) continue
+        if (l.kind == LayerKind.MAP) {
+            drawImage(vm.image, dstSize = IntSize(W, H), alpha = l.opacity, filterQuality = FilterQuality.None)
+        } else {
+            val bmp = vm.layerBitmap(l.id) ?: continue
+            val s = l.widthTiles / bmp.width
+            withTransform({
+                translate(l.cx, l.cy)
+                rotate(l.rotDeg, Offset.Zero)
+                scale(s, s, Offset.Zero)
+            }) {
+                drawImage(bmp, topLeft = Offset(-bmp.width / 2f, -bmp.height / 2f), alpha = l.opacity, filterQuality = FilterQuality.Medium)
+            }
+        }
+    }
+    // batas kanvas pulau 256x256 selalu terlihat (walau peta transparan / disembunyikan)
+    drawRect(Color.White.copy(alpha = .28f), Offset.Zero, Size(W.toFloat(), H.toFloat()), style = Stroke(px(1f)))
 }

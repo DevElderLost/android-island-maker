@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class IconKind { ZOOM_IN, ZOOM_OUT, FIT, ROT_LEFT, ROT_RIGHT, UNDO, REDO, FLIP_H, FLIP_V, IMPORT, TRASH, BACK, BRUSH, ERASER, LAYERS, IMAGE, EYE, EYE_OFF, UP, DOWN, MOVE, CLOSE, FOLDER }
+enum class IconKind { ZOOM_IN, ZOOM_OUT, FIT, ROT_LEFT, ROT_RIGHT, UNDO, REDO, FLIP_H, FLIP_V, IMPORT, TRASH }
 
 /** Tombol bulat 40dp (gaya sama dengan tombol zoom) dengan ikon vektor. */
 @Composable
@@ -49,7 +49,7 @@ fun IconBtn(
 }
 
 /** Semua ikon digambar pada kotak virtual 24x24 dengan garis 2 satuan, ujung membulat. */
-internal fun DrawScope.drawIconGlyph(kind: IconKind, color: Color) {
+private fun DrawScope.drawIconGlyph(kind: IconKind, color: Color) {
     val u = size.minDimension / 24f
     val st = Stroke(width = 2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
@@ -118,38 +118,6 @@ internal fun DrawScope.drawIconGlyph(kind: IconKind, color: Color) {
             poly(12f, 4f, 12f, 14f); poly(8f, 10f, 12f, 14f, 16f, 10f)
             poly(5f, 14f, 5f, 19f, 19f, 19f, 19f, 14f)
         }
-        IconKind.BACK -> poly(15f, 5f, 8f, 12f, 15f, 19f)
-        IconKind.CLOSE -> { poly(6f, 6f, 18f, 18f); poly(18f, 6f, 6f, 18f) }
-        IconKind.UP -> poly(6f, 15f, 12f, 9f, 18f, 15f)
-        IconKind.DOWN -> poly(6f, 9f, 12f, 15f, 18f, 9f)
-        IconKind.BRUSH -> {
-            poly(4f, 20f, 5f, 15f, 16f, 4f, 20f, 8f, 9f, 19f, 4f, 20f)
-            poly(13f, 7f, 17f, 11f)
-        }
-        IconKind.ERASER -> {
-            poly(5f, 14f, 13f, 6f, 20f, 13f, 12f, 21f, 5f, 14f)
-            poly(9f, 10f, 16f, 17f)
-        }
-        IconKind.LAYERS -> {
-            poly(12f, 4f, 21f, 9f, 12f, 14f, 3f, 9f, 12f, 4f)
-            poly(3f, 14f, 12f, 19f, 21f, 14f)
-        }
-        IconKind.IMAGE -> {
-            poly(3f, 5f, 21f, 5f, 21f, 19f, 3f, 19f, 3f, 5f)
-            poly(3f, 17f, 9f, 11f, 14f, 16f, 17f, 13f, 21f, 17f)
-            drawCircle(color, 1.6f * u, Offset(8f * u, 9.5f * u))
-        }
-        IconKind.EYE, IconKind.EYE_OFF -> {
-            drawOval(color, topLeft = Offset(3f * u, 7f * u), size = Size(18f * u, 10f * u), style = st)
-            drawCircle(color, 2.6f * u, Offset(12f * u, 12f * u))
-            if (kind == IconKind.EYE_OFF) poly(4f, 4f, 20f, 20f)
-        }
-        IconKind.MOVE -> {
-            poly(12f, 3f, 12f, 21f); poly(3f, 12f, 21f, 12f)
-            poly(9f, 6f, 12f, 3f, 15f, 6f); poly(9f, 18f, 12f, 21f, 15f, 18f)
-            poly(6f, 9f, 3f, 12f, 6f, 15f); poly(18f, 9f, 21f, 12f, 18f, 15f)
-        }
-        IconKind.FOLDER -> poly(3f, 6f, 9f, 6f, 11f, 9f, 21f, 9f, 21f, 19f, 3f, 19f, 3f, 6f)
         IconKind.TRASH -> {
             poly(5f, 7f, 19f, 7f); poly(9f, 7f, 9f, 4f, 15f, 4f, 15f, 7f)
             poly(7f, 7f, 8f, 20f, 16f, 20f, 17f, 7f)

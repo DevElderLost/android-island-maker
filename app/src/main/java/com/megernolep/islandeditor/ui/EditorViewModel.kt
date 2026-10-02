@@ -1,5 +1,18 @@
 package com.megernolep.islandeditor.ui
 
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.provider.OpenableColumns
+import androidx.compose.runtime.mutableStateListOf
+import androidx.core.content.FileProvider
+import com.megernolep.islandeditor.data.AppSettings
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import org.json.JSONArray
+
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.roundToInt
@@ -233,6 +246,254 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    // ---------------- proyek (file .spec.json di folder proyek) ----------------
+    var projectFile: File? = null
+        private set
+    private var savedDoc: Doc? = null
+    private var savedRev = 0
+
+    private fun keyOf(f: File) = f.name.removeSuffix(".spec.json")
+    private fun projectKey(): String = projectFile?.let { keyOf(it) } ?: "scratch"
+    fun projectTitle(): String = projectFile?.let { keyOf(it) } ?: "Island Editor"
+
+    /** Muat proyek dari file .spec.json (dipanggil MainActivity dengan path dari daftar proyek). */
+    fun openProject(file: File?) {
+        if (file == null || !file.exists()) return
+        try {
+            val d = SpecCodec.decode(JSONObject(file.readText(Charsets.UTF_8)), catalog)
+            projectFile = file
+            doc = d
+            undoStack.clear(); redoStack.clear(); canUndo = false; canRedo = false
+            selection = null; trigPending = null
+            applyTypeUi()
+            bump()
+            savedDoc = doc; savedRev = rev
+            loadLayers()
+        } catch (e: Exception) {
+            toast = "Gagal membuka proyek: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    /** Hasil export: spec -> folder proyek (file ikut diganti nama bila template_id berubah), zip -> folder export. */
+    private fun writeOutput(kind: ExportKind, name: String, bytes: ByteArray): File {
+        val ctx = getApplication<Application>()
+        if (kind == ExportKind.ISLAND) {
+            val f = File(AppSettings.exportDir(ctx).also { it.mkdirs() }, AppSettings.sanitizeFileName(name))
+            AppSettings.writeAtomic(f, bytes)
+            return f
+        }
+        val dir = AppSettings.projectDir(ctx).also { it.mkdirs() }
+        var target = File(dir, AppSettings.sanitizeFileName(name))
+        val cur = projectFile
+        if (cur != null && cur != target && target.exists()) target = cur   // ID baru bentrok dengan proyek lain: tetap di file lama
+        AppSettings.writeAtomic(target, bytes)
+        if (cur != null && cur != target) {
+            File(ctx.filesDir, "refs/${keyOf(cur)}").renameTo(File(ctx.filesDir, "refs/${keyOf(target)}"))
+            cur.delete()
+        }
+        projectFile = target
+        savedDoc = doc; savedRev = rev
+        return target
+    }
+
+    // ---------------- kuas <-> penghapus (ikon toolbar) ----------------
+    private var lastDrawMode = Mode.BIOME
+    private fun lastDrawModeSync(m: Mode) { if (m == Mode.ERASE && mode != Mode.ERASE) lastDrawMode = mode }
+    private fun switchMode(m: Mode) {
+        mode = m; trigPending = null; hover = null; hint = ""; selection = null; layerEditing = false
+    }
+    /** Ikon Kuas: dari penghapus kembali ke mode menggambar sebelumnya; selain itu ke kuas biome. */
+    fun selectBrush() { switchMode(if (mode == Mode.ERASE) lastDrawMode else Mode.BIOME) }
+    fun selectEraser() { if (mode != Mode.ERASE) { lastDrawMode = mode; switchMode(Mode.ERASE) } }
+
+    // ---------------- layer: peta + gambar referensi untuk menjiplak ----------------
+    val layers = mutableStateListOf(Layer(id = 0, kind = LayerKind.MAP, name = "Peta pulau"))
+    var selectedLayerId by mutableIntStateOf(0)
+    var layersOpen by mutableStateOf(false)
+    /** true = gerakan di kanvas menggeser/menskala/memutar gambar referensi terpilih (bukan menggambar). */
+    var layerEditing by mutableStateOf(false)
+    private val layerBitmaps = ConcurrentHashMap<Int, ImageBitmap>()
+    private var nextLayerId = 1
+
+    fun layerBitmap(id: Int): ImageBitmap? = if (id == 0) image else layerBitmaps[id]
+    fun selectedLayer(): Layer? = layers.firstOrNull { it.id == selectedLayerId }
+
+    private fun updateLayer(id: Int, f: (Layer) -> Layer) {
+        val i = layers.indexOfFirst { it.id == id }
+        if (i >= 0) layers[i] = f(layers[i])
+    }
+
+    fun setLayerVisible(id: Int, v: Boolean) { updateLayer(id) { it.copy(visible = v) }; persistLayers() }
+    fun setLayerOpacity(id: Int, v: Float) { updateLayer(id) { it.copy(opacity = v.coerceIn(0f, 1f)) } }
+    fun layersChanged() = persistLayers()
+
+    fun moveLayer(id: Int, up: Boolean) {
+        val i = layers.indexOfFirst { it.id == id }
+        val j = if (up) i + 1 else i - 1
+        if (i < 0 || j < 0 || j >= layers.size) return
+        val a = layers[i]; layers[i] = layers[j]; layers[j] = a
+        persistLayers()
+    }
+
+    fun removeLayer(id: Int) {
+        val l = layers.firstOrNull { it.id == id } ?: return
+        if (l.kind != LayerKind.IMAGE) return
+        layers.removeAll { it.id == id }
+        layerBitmaps.remove(id)
+        layerDir(false)?.let { File(it, l.file).delete() }
+        if (selectedLayerId == id) selectedLayerId = 0
+        layerEditing = false
+        persistLayers()
+        rev++
+    }
+
+    fun fitLayerToMap(id: Int) {
+        val b = layerBitmaps[id] ?: return
+        updateLayer(id) { it.copy(cx = W / 2f, cy = H / 2f, rotDeg = 0f, widthTiles = min(W.toFloat(), W.toFloat() * b.width / b.height)) }
+        persistLayers()
+    }
+
+    /** Geser gambar referensi (delta layar -> delta peta). */
+    fun layerPan(dScreen: Offset) {
+        val l = selectedLayer() ?: return
+        if (l.kind != LayerKind.IMAGE) return
+        val m = rotV(dScreen.x, dScreen.y, -view.rot)
+        updateLayer(l.id) { it.copy(cx = it.cx + m.x / view.k, cy = it.cy + m.y / view.k) }
+    }
+
+    /** Skala + putar gambar referensi terhadap titik tengah jari. */
+    fun layerTransform(centroid: Offset, pan: Offset, zoom: Float, rotDeg: Float) {
+        val l = selectedLayer() ?: return
+        if (l.kind != LayerKind.IMAGE) return
+        val pivot = screenToMap(centroid)
+        val d = pivot - screenToMap(centroid - pan)
+        val th = Math.toRadians(rotDeg.toDouble())
+        val c = cos(th).toFloat(); val s = sin(th).toFloat()
+        val vx = l.cx + d.x - pivot.x; val vy = l.cy + d.y - pivot.y
+        updateLayer(l.id) {
+            it.copy(
+                cx = pivot.x + (vx * c - vy * s) * zoom,
+                cy = pivot.y + (vx * s + vy * c) * zoom,
+                widthTiles = (it.widthTiles * zoom).coerceIn(4f, 4096f),
+                rotDeg = it.rotDeg + rotDeg,
+            )
+        }
+    }
+
+    private fun layerDir(create: Boolean): File? {
+        val d = File(getApplication<Application>().filesDir, "refs/${projectKey()}")
+        if (create) d.mkdirs()
+        return d
+    }
+
+    private fun decodeBytes(bytes: ByteArray, maxSide: Int = 2048): Bitmap? {
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+        var s = 1
+        while (max(o.outWidth, o.outHeight) / s > maxSide) s *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = s })
+    }
+
+    private fun exifDegrees(bytes: ByteArray): Int = try {
+        when (ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270
+            else -> 0
+        }
+    } catch (_: Exception) { 0 }
+
+    /** Impor gambar referensi: disalin ke penyimpanan app (maks 2048 px) supaya tetap ada walau file asli dihapus. */
+    fun addReferenceImage(uri: Uri) {
+        val ctx = getApplication<Application>()
+        busy = true
+        viewModelScope.launch {
+            try {
+                val r = withContext(Dispatchers.IO) {
+                    val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        ?: throw IOException("Tidak bisa membuka gambar")
+                    var bmp = decodeBytes(bytes) ?: throw IOException("Format gambar tidak didukung")
+                    val deg = exifDegrees(bytes)
+                    if (deg != 0) bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(deg.toFloat()) }, true)
+                    val id = nextLayerId++
+                    val fileName = "img_$id.png"
+                    File(layerDir(true), fileName).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    val label = ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Gambar $id"
+                    RefLoaded(id, fileName, bmp, label)
+                }
+                layerBitmaps[r.id] = r.bmp.asImageBitmap()
+                val w = min(W.toFloat(), W.toFloat() * r.bmp.width / r.bmp.height)
+                layers.add(Layer(r.id, LayerKind.IMAGE, r.name, true, 0.5f, W / 2f, H / 2f, w, 0f, r.file))
+                selectedLayerId = r.id
+                layersOpen = true
+                layerEditing = false
+                persistLayers()
+                rev++
+            } catch (e: Exception) {
+                toast = "Gagal impor gambar: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    private fun persistLayers() {
+        try {
+            val dir = layerDir(true) ?: return
+            val arr = JSONArray()
+            for (l in layers) {
+                arr.put(
+                    JSONObject().put("id", l.id).put("kind", l.kind.name).put("name", l.name)
+                        .put("visible", l.visible).put("opacity", l.opacity.toDouble())
+                        .put("cx", l.cx.toDouble()).put("cy", l.cy.toDouble())
+                        .put("w", l.widthTiles.toDouble()).put("rot", l.rotDeg.toDouble()).put("file", l.file),
+                )
+            }
+            File(dir, "layers.json").writeText(arr.toString())
+        } catch (_: Exception) { /* best-effort */ }
+    }
+
+    private fun loadLayers() {
+        layers.clear(); layerBitmaps.clear()
+        selectedLayerId = 0; layerEditing = false
+        val dir = layerDir(false)
+        val loaded = ArrayList<Layer>()
+        try {
+            val f = dir?.let { File(it, "layers.json") }
+            if (f != null && f.exists()) {
+                val arr = JSONArray(f.readText())
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    loaded.add(
+                        Layer(
+                            o.optInt("id"), if (o.optString("kind") == "MAP") LayerKind.MAP else LayerKind.IMAGE,
+                            o.optString("name", "Layer"), o.optBoolean("visible", true),
+                            o.optDouble("opacity", 1.0).toFloat(), o.optDouble("cx", 128.0).toFloat(),
+                            o.optDouble("cy", 128.0).toFloat(), o.optDouble("w", 256.0).toFloat(),
+                            o.optDouble("rot", 0.0).toFloat(), o.optString("file", ""),
+                        ),
+                    )
+                }
+            }
+        } catch (_: Exception) { loaded.clear() }
+        if (loaded.none { it.kind == LayerKind.MAP }) loaded.add(0, Layer(id = 0, kind = LayerKind.MAP, name = "Peta pulau"))
+        layers.addAll(loaded)
+        nextLayerId = (loaded.maxOfOrNull { it.id } ?: 0) + 1
+        val imgs = loaded.filter { it.kind == LayerKind.IMAGE && it.file.isNotEmpty() }
+        if (imgs.isNotEmpty() && dir != null) {
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    for (l in imgs) {
+                        val f = File(dir, l.file)
+                        if (f.exists()) decodeBytes(f.readBytes())?.let { layerBitmaps[l.id] = it.asImageBitmap() }
+                    }
+                }
+                rev++
+            }
+        }
+    }
+
     private val undoStack = ArrayList<Doc>()
     private val redoStack = ArrayList<Doc>()
     var canRedo by mutableStateOf(false)
@@ -313,7 +574,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- mode & opts ----------------
     fun onModeTap(m: Mode) {
         if (mode == m) { panelOpen = !panelOpen; return }
-        mode = m; panelOpen = true; selection = null   // SEL_MODE
+        lastDrawModeSync(m); mode = m; panelOpen = true; selection = null; layerEditing = false   // SEL_MODE
         trigPending = null; hover = null; hint = ""
     }
 
@@ -756,8 +1017,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val (meta, file) = result
-                val uri = withContext(Dispatchers.IO) { FileStore.saveToDownloads(ctx, file.first, meta.mime, file.second) }
-                exportResult = meta.copy(path = "Downloads/${file.first}", uri = uri)
+                val saved = withContext(Dispatchers.IO) { writeOutput(kind, file.first, file.second) }
+                exportResult = meta.copy(
+                    path = saved.absolutePath,
+                    uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", saved),
+                )
             } catch (e: Exception) {
                 toast = "Gagal export: ${e.message ?: e.javaClass.simpleName}"
             } finally {
@@ -792,10 +1056,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------------- draft otomatis ----------------
+    /** AUTOSAVE_PROJECT — dipanggil MainActivity.onPause/onStop; hanya menulis kalau ada perubahan. */
     fun saveDraft() {
+        val cur = projectFile ?: return
+        if (rev == savedRev && doc === savedDoc) { persistLayers(); return }
         try {
-            FileStore.writeDraft(getApplication(), SpecCodec.encode(doc, catalog, includeWater = false).toString())
-        } catch (_: Exception) { /* draft best-effort */ }
+            AppSettings.writeAtomic(cur, SpecCodec.encode(doc, catalog).toString().toByteArray(Charsets.UTF_8))
+            savedRev = rev; savedDoc = doc
+        } catch (_: Exception) { /* best-effort */ }
+        persistLayers()
     }
 
     private fun restoreDraft() {
@@ -807,7 +1076,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadRockMarks()
-        restoreDraft()
+        // restoreDraft() dinonaktifkan: proyek dimuat lewat openProject()
         applyTypeUi()
         refreshBitmap()
     }

@@ -16,18 +16,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (vm.projectFile == null) vm.openProject(intent.getStringExtra("project_path")?.let { java.io.File(it) })
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         setContent { IslandTheme { EditorScreen(vm) } }
-    }
-
-    /** Simpan SEBELUM daftar proyek tampil lagi (onPause editor terjadi sebelum onResume daftar). */
-    override fun onPause() {
-        vm.saveDraft()
-        super.onPause()
     }
 
     /** Draft otomatis: aman walau proses dimatikan sistem setelah app ke latar belakang. */
