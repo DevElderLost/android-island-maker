@@ -1,5 +1,16 @@
 package com.megernolep.islandeditor.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.Icon
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.width
 
@@ -83,15 +94,14 @@ fun EditorScreen(vm: EditorViewModel) {
 
         Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
             MapCanvas(vm)
-            CanvasToolbar(
-                vm, onImport = { importLauncher.launch(arrayOf("*/*")) },
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 8.dp, end = 64.dp),
-            )
-            if (vm.layersOpen) {
-                LayersPanel(
-                    vm, onAddImage = { imagePicker.launch(arrayOf("image/*")) },
-                    modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 56.dp),
-                )
+            Column(
+                Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 8.dp, end = 64.dp),   // toolbar+panel kolom
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CanvasToolbar(vm, onImport = { importLauncher.launch(arrayOf("*/*")) }, modifier = Modifier)
+                if (vm.layersOpen) {
+                    LayersPanel(vm, onAddImage = { imagePicker.launch(arrayOf("image/*")) })
+                }
             }
             ViewControls(vm, Modifier.align(Alignment.TopEnd).padding(8.dp))
             Text(
@@ -103,10 +113,7 @@ fun EditorScreen(vm: EditorViewModel) {
         }
 
         if (vm.hint.isNotEmpty() && vm.mode != Mode.BUILDING) {
-            Text(
-                vm.hint, color = Warn, fontSize = 12.sp,
-                modifier = Modifier.fillMaxWidth().background(SurfHi).padding(horizontal = 12.dp, vertical = 6.dp),
-            )
+            Note(vm.hint, Warn, Modifier.fillMaxWidth().background(SurfHi).padding(horizontal = 12.dp, vertical = 6.dp))
         }
 
         // Handle di tengah-atas menu: geser ke atas = muncul, geser ke bawah = sembunyi (atau ketuk).
@@ -139,7 +146,13 @@ private fun Header(vm: EditorViewModel) {
             val act = LocalContext.current as? android.app.Activity
             IconBtn(IconKind.BACK) { act?.finish() }
             Text("  " + vm.projectTitle(), fontSize = 16.sp, color = Accent, maxLines = 1, modifier = Modifier.weight(1f))
-            Text(if (open) "Sembunyikan ▴" else "Info pulau ▾", color = Muted, fontSize = 12.sp, modifier = Modifier.clickable { open = !open }.padding(4.dp))
+            Row(Modifier.clickable { open = !open }.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (open) "Sembunyikan" else "Info pulau", color = Muted, fontSize = 12.sp)
+                Icon(
+                    if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null, tint = Muted, modifier = Modifier.size(18.dp),
+                )
+            }
         }
         AnimatedVisibility(open) {
             Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -180,8 +193,8 @@ private fun ViewControls(vm: EditorViewModel, modifier: Modifier) {
         IconBtn(IconKind.FIT) { vm.fitView() }
         IconBtn(IconKind.ROT_LEFT) { vm.rotateBy(-0.2618f) }    // 15° berlawanan arah jarum jam
         IconBtn(IconKind.ROT_RIGHT) { vm.rotateBy(0.2618f) }    // 15° searah jarum jam
-        CircleBtn("🧭", vm.gameView) { vm.toggleGameView() }
-        CircleBtn("✋", vm.panMode) { vm.panMode = !vm.panMode }
+        IconBtn(IconKind.COMPASS, active = vm.gameView) { vm.toggleGameView() }
+        IconBtn(IconKind.PAN, active = vm.panMode) { vm.panMode = !vm.panMode }
     }
 }
 
@@ -200,7 +213,7 @@ private fun ModeBar(vm: EditorViewModel) {
                     .clickable { vm.onModeTap(m) }.padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(m.icon, fontSize = 14.sp)
+                Icon(modeIcon(m), contentDescription = null, tint = if (on) Bg else TextHi, modifier = Modifier.size(16.dp))
                 Text("  ${m.label}", color = if (on) Bg else TextHi, fontSize = 12.sp)
             }
         }
@@ -217,13 +230,13 @@ private fun ActionBar(vm: EditorViewModel, onImport: () -> Unit) {
                 onClick = { vm.requestExport(ExportKind.SPEC) }, enabled = !vm.busy,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, Outline),
                 contentPadding = PaddingValues(vertical = 12.dp),
-            ) { Text("💾 Simpan .spec.json", color = TextHi, fontSize = 12.sp) }
+            ) { IconLabel(Icons.Filled.Save, "Simpan .spec.json") }
             Button(
                 onClick = { vm.requestExport(ExportKind.ISLAND) }, enabled = !vm.busy,
                 modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Bg),
                 contentPadding = PaddingValues(vertical = 12.dp),
-            ) { Text("🏝️ Export as Island", fontSize = 12.sp) }
+            ) { IconLabel(Icons.Filled.Archive, "Export as Island", tint = Bg, textColor = Bg) }
         }
     }
 }
@@ -279,12 +292,12 @@ private fun Dialogs(vm: EditorViewModel) {
     vm.exportResult?.let { r ->
         AlertDialog(
             onDismissRequest = { vm.exportResult = null }, containerColor = SurfHi,
-            title = { Text("✅ ${r.title}") },
+            title = { IconLabel(Icons.Filled.CheckCircle, r.title, tint = Accent, fontSize = 18.sp, iconSize = 22.dp) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(r.path, color = Accent, fontSize = 13.sp)
                     r.details.forEach { Note(it) }
-                    r.warnings.forEach { Note("⚠ $it", Warn) }
+                    r.warnings.forEach { Note("[!] $it", Warn) }
                 }
             },
             confirmButton = { TextButton(onClick = { vm.exportResult = null }) { Text("OK", color = Accent) } },
@@ -327,17 +340,26 @@ private fun MenuHandle(open: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 /** Undo · Redo · Flip H · Flip V · Impor — ikon bulat berbaris horizontal di kiri atas kanvas. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CanvasToolbar(vm: EditorViewModel, onImport: () -> Unit, modifier: Modifier) {
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        IconBtn(IconKind.UNDO, enabled = vm.canUndo) { vm.undo() }
-        IconBtn(IconKind.REDO, enabled = vm.canRedo) { vm.redo() }
-        IconBtn(IconKind.FLIP_H) { vm.flip(true) }
-        IconBtn(IconKind.FLIP_V) { vm.flip(false) }
-        IconBtn(IconKind.IMPORT) { onImport() }
-        Box(Modifier.width(1.dp).height(40.dp).background(Outline))
-        IconBtn(IconKind.BRUSH, active = vm.mode != Mode.ERASE) { vm.selectBrush() }
-        IconBtn(IconKind.ERASER, active = vm.mode == Mode.ERASE) { vm.selectEraser() }
-        IconBtn(IconKind.LAYERS, active = vm.layersOpen) { vm.layersOpen = !vm.layersOpen }
+    // Dua kelompok = dua anak FlowRow: kalau tidak muat satu baris, kelompok kedua turun UTUH ke baris bawah.
+    FlowRow(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconBtn(IconKind.UNDO, enabled = vm.canUndo) { vm.undo() }
+            IconBtn(IconKind.REDO, enabled = vm.canRedo) { vm.redo() }
+            IconBtn(IconKind.FLIP_H) { vm.flip(true) }
+            IconBtn(IconKind.FLIP_V) { vm.flip(false) }
+            IconBtn(IconKind.IMPORT) { onImport() }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconBtn(IconKind.BRUSH, active = vm.mode != Mode.ERASE) { vm.selectBrush() }
+            IconBtn(IconKind.ERASER, active = vm.mode == Mode.ERASE) { vm.selectEraser() }
+            IconBtn(IconKind.LAYERS, active = vm.layersOpen) { vm.layersOpen = !vm.layersOpen }
+        }
     }
 }

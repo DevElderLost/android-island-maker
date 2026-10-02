@@ -6,7 +6,7 @@ import kotlin.math.min
 
 /** Kode biome, warna peta, dan nama (dicocokkan dari data terrain asli). */
 object Biomes {
-    class Info(val name: String, val cat: String)
+    class Info(val name: String, val icon: String, val cat: String)
 
     val baseColors: Map<Int, IntArray> = linkedMapOf(
         0 to intArrayOf(34, 120, 60), 1 to intArrayOf(20, 140, 40), 2 to intArrayOf(210, 180, 100),
@@ -17,14 +17,14 @@ object Biomes {
     )
 
     val info: Map<Int, Info> = mapOf(
-        0 to Info("Hutan sedang", "Tanah"), 1 to Info("Hutan tropis", "Tanah"),
-        2 to Info("Gurun", "Tanah"), 3 to Info("Tundra", "Tanah"),
-        4 to Info("Padang salju", "Salju"), 5 to Info("Padang rumput", "Tanah"),
-        6 to Info("Rawa lumpur", "Tanah"), 7 to Info("Vulkanik", "Tanah"),
-        9 to Info("Pantai kerikil", "Pantai"), 10 to Info("Pantai pasir", "Pantai"),
-        11 to Info("Laut dingin", "Air laut"), 12 to Info("Laut hangat", "Air laut"),
-        13 to Info("Sungai", "Air sungai/danau"), 14 to Info("Danau", "Air sungai/danau"),
-        15 to Info("Lava", "Lava"),
+        0 to Info("Hutan sedang", "🌳", "Tanah"), 1 to Info("Hutan tropis", "🌴", "Tanah"),
+        2 to Info("Gurun", "🏜️", "Tanah"), 3 to Info("Tundra", "🪨", "Tanah"),
+        4 to Info("Padang salju", "❄️", "Salju"), 5 to Info("Padang rumput", "🌾", "Tanah"),
+        6 to Info("Rawa lumpur", "🐊", "Tanah"), 7 to Info("Vulkanik", "🌋", "Tanah"),
+        9 to Info("Pantai kerikil", "🪨", "Pantai"), 10 to Info("Pantai pasir", "🏖️", "Pantai"),
+        11 to Info("Laut dingin", "🌊", "Air laut"), 12 to Info("Laut hangat", "🌊", "Air laut"),
+        13 to Info("Sungai", "🏞️", "Air sungai/danau"), 14 to Info("Danau", "💦", "Air sungai/danau"),
+        15 to Info("Lava", "🔥", "Lava"),
     )
 
     val short: Map<Int, String> = linkedMapOf(

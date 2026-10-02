@@ -733,7 +733,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         pushUndo(doc.deepCopy())
         val (d, bad) = Ops.storyPreset(doc, opts.npcPresetLv - 1)
         doc = d
-        hint = if (bad.isNotEmpty()) "⚠ ${bad.joinToString(", ")} jatuh di air pada peta ini — cek biome di titik itu." else ""
+        hint = if (bad.isNotEmpty()) "[!] ${bad.joinToString(", ")} jatuh di air pada peta ini — cek biome di titik itu." else ""
         bump()
     }
 
@@ -900,7 +900,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private fun thorn(x: Int, y: Int) {
         val (set, skipped) = Ops.paintThorn(doc, x, y, opts.thornBrush, opts.thornErase, opts.thornLand)
         doc = doc.copy(thorns = set)
-        hint = if (skipped > 0) "⛔ $skipped tile air dilewati" else ""
+        hint = if (skipped > 0) "[x] $skipped tile air dilewati" else ""
         mark(); rev++
     }
 
@@ -924,7 +924,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             Mode.THORN -> { thorn(x, y); return }
             Mode.TRIGGER -> {
                 val flow = trigCurFlow()
-                if (flow.isEmpty()) { hint = "⛔ Isi nama alur dulu (jenis \"Khusus\")."; return }
+                if (flow.isEmpty()) { hint = "[x] Isi nama alur dulu (jenis \"Khusus\")."; return }
                 hint = ""
                 val r = Ops.trigApply(doc, flow, o.trigExit.trim(), o.trigTool, o.trigSize, x, y, o.trigErase, trigPending)
                 doc = r.doc; trigPending = r.pending
@@ -935,21 +935,21 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             Mode.LANDMARK -> changed = placeOrSelectLandmark(x, y, o.selLandmark, 0, false)
             Mode.PORT -> doc = doc.copy(ports = listOf(Pt(x, y)))   // MVP: cuma 1 dermaga
             Mode.DECOR ->
-                if (doc.code(x, y) >= 11) changed = reject("⛔ Ditolak: hewan objek harus di darat/pantai, bukan air.")
+                if (doc.code(x, y) >= 11) changed = reject("[x] Ditolak: hewan objek harus di darat/pantai, bukan air.")
                 else { hint = ""; changed = placeOrSelectDecor(x, y, o.selDecor, o.decRot) }
             Mode.NPC ->
-                if (doc.code(x, y) >= 11) changed = reject("⛔ Ditolak: NPC harus di darat/pantai, bukan air.")
+                if (doc.code(x, y) >= 11) changed = reject("[x] Ditolak: NPC harus di darat/pantai, bukan air.")
                 else { hint = ""; doc = Ops.putNpc(doc, o.selNpc, x, y, o.npcRadius.coerceIn(0, 20)) }
             Mode.RAIL -> {
                 val pf = railPrefab()
-                if (pf.isEmpty()) changed = reject("⛔ Pilih prefab dulu.")
+                if (pf.isEmpty()) changed = reject("[x] Pilih prefab dulu.")
                 else changed = placeOrSelectLandmark(x, y, pf, o.railRot, true)
             }
             Mode.RAFT ->
-                if (x + 3 >= W || y + 3 >= H || Ops.raftCheck(doc, x, y).core > 0) changed = reject("⛔ Ditolak: area 4x4 rakit harus di darat dan di dalam peta.")
+                if (x + 3 >= W || y + 3 >= H || Ops.raftCheck(doc, x, y).core > 0) changed = reject("[x] Ditolak: area 4x4 rakit harus di darat dan di dalam peta.")
                 else { hint = ""; doc = doc.copy(raft = Pt(x, y)) }
             Mode.SPAWN ->
-                if (!Ops.spawnAreaOk(doc, x, y)) changed = reject("⛔ Ditolak: area 9x9 di sekitar titik ini kena air/tepi peta. Pilih tempat yang lebih ke dalam daratan.")
+                if (!Ops.spawnAreaOk(doc, x, y)) changed = reject("[x] Ditolak: area 9x9 di sekitar titik ini kena air/tepi peta. Pilih tempat yang lebih ke dalam daratan.")
                 else { hint = ""; doc = doc.copy(spawn = Pt(x, y)) }
             Mode.HERD -> {
                 val c = doc.code(x, y)
@@ -972,9 +972,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun footWarning(f: FootCheck): String = buildList {
-        if (f.oob) add("⛔ keluar dari peta")
-        if (f.overlap) add("⚠ tumpang tindih bangunan lain")
-        if (f.water > 0) add("⚠ ${f.water} tile di air/lava")
+        if (f.oob) add("[x] keluar dari peta")
+        if (f.overlap) add("[!] tumpang tindih bangunan lain")
+        if (f.water > 0) add("[!] ${f.water} tile di air/lava")
     }.joinToString("\n")
 
     // =====================================================================

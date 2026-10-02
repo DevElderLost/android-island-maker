@@ -1,7 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.material3.Icon
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -74,7 +72,7 @@ fun MiniIcon(
             .border(1.dp, Outline, RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(kind.vector(), contentDescription = null, tint = fg, modifier = Modifier.size(18.dp)) }
+    ) { Canvas(Modifier.size(18.dp)) { drawIconGlyph(kind, fg) } }
 }
 
 /** Panel layer di sisi kiri kanvas (gaya aplikasi gambar). */

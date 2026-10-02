@@ -1,5 +1,7 @@
 package com.megernolep.islandeditor.ui
 
+import androidx.compose.material3.Icon
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,11 +66,14 @@ private fun BiomePanel(vm: EditorViewModel) {
                     .border(if (on) 3.dp else 1.dp, if (on) Color.White else Outline, RoundedCornerShape(10.dp))
                     .clickable { vm.setOpts { it.copy(selBiome = c) } },
                 contentAlignment = Alignment.Center,
-            ) { Text(Biomes.info[c]?.icon ?: "", fontSize = 18.sp) }
+            ) { Icon(
+                    biomeIcon(c), contentDescription = null, modifier = Modifier.size(22.dp),
+                    tint = if (col[0] * 0.299 + col[1] * 0.587 + col[2] * 0.114 > 150) Color(0xFF1B1B1B) else Color.White,
+                ) }
         }
     }
     val info = Biomes.info[o.selBiome]
-    Note("${info?.icon ?: ""} ${info?.name ?: "?"} (kode ${o.selBiome})", TextHi)
+    IconLabel(biomeIcon(o.selBiome), "${info?.name ?: "?"} (kode ${o.selBiome})", modifier = Modifier.padding(vertical = 3.dp))
     CheckRow("Kunci palet sesuai tipe pulau", o.lockPalette) { v -> vm.setOpts { it.copy(lockPalette = v) }; vm.applyTypeUi() }
     CheckRow("Collidable (flag 0x80)", o.collidable) { v -> vm.setOpts { it.copy(collidable = v) } }
     CheckRow("Tidak bisa tanam (flag 0x40)", o.notPlant) { v -> vm.setOpts { it.copy(notPlant = v) } }
@@ -92,7 +97,7 @@ private fun RockPanel(vm: EditorViewModel) {
     CheckRow("Hanya di darat (lewati air/lava)", o.rockLandOnly) { v -> vm.setOpts { it.copy(rockLandOnly = v) } }
     CheckRow("Mode hapus batu", o.rockErase) { v -> vm.setOpts { it.copy(rockErase = v) } }
     OutlinedButton(onClick = { vm.checkRocks() }) { Text("Cek batu vs spawn/rakit/objek") }
-    vm.rockReportLines.forEach { Note(it, if (it.startsWith("⚠")) Warn else TextHi) }
+    vm.rockReportLines.forEach { Note(it, if (it.startsWith("[!]")) Warn else TextHi) }
 }
 
 // ---------------------------------------------------------------- NATURAL
@@ -176,7 +181,7 @@ private fun SpawnPanel(vm: EditorViewModel) {
     val sp = vm.doc.spawn
     Note("Ketuk peta untuk menaruh titik spawn pemain. Area 9×9 di sekelilingnya harus darat penuh.")
     OutlinedButton(onClick = { vm.autoSpawn() }) { Text("Otomatis (tengah daratan)") }
-    Note(if (sp == null) "Belum ada spawn." else "Spawn: ${sp.x}, ${sp.y} — " + if (Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) "✓ area aman" else "⚠ area kena air/tepi", if (sp != null && !Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) Warn else TextHi)
+    Note(if (sp == null) "Belum ada spawn." else "Spawn: ${sp.x}, ${sp.y} — " + if (Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) "[ok] area aman" else "[!] area kena air/tepi", if (sp != null && !Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) Warn else TextHi)
 }
 
 @Composable
@@ -187,10 +192,10 @@ private fun RaftPanel(vm: EditorViewModel) {
     val st = Ops.raftCheck(vm.doc, r.x, r.y)
     Note(
         "Rakit: ${r.x}, ${r.y} — " + when {
-            st.ok -> "✓ aman"
-            st.oob -> "⚠ margin keluar peta"
-            st.core > 0 -> "⛔ ${st.core} tile inti kena air"
-            else -> "⚠ ${st.margin} tile margin kena air"
+            st.ok -> "[ok] aman"
+            st.oob -> "[!] margin keluar peta"
+            st.core > 0 -> "[x] ${st.core} tile inti kena air"
+            else -> "[!] ${st.margin} tile margin kena air"
         },
         if (st.ok) TextHi else Warn,
     )

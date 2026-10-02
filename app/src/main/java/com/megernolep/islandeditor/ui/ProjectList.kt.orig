@@ -1,10 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BeachAccess
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Icon
-
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
@@ -201,8 +196,8 @@ fun ProjectListScreen(vm: ProjectListViewModel, onOpen: (File) -> Unit, onSettin
     Box(Modifier.fillMaxSize().background(Bg).systemBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconLabel(Icons.Filled.BeachAccess, "Proyek Pulau", modifier = Modifier.weight(1f), tint = Accent, textColor = Accent, fontSize = 20.sp, iconSize = 26.dp)
-                IconBtn(IconKind.SETTINGS) { onSettings() }
+                Text("🏝️ Proyek Pulau", color = Accent, fontSize = 20.sp, modifier = Modifier.weight(1f))
+                IconBtn(IconKind.FOLDER) { onSettings() }
             }
             if (vm.items.isEmpty() && !vm.loading) {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -274,7 +269,7 @@ private fun ProjectCard(item: ProjectItem, sub: String, onClick: () -> Unit, onL
             if (t != null) {
                 Image(t, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
             } else {
-                if (item.broken) Icon(Icons.Filled.Warning, contentDescription = null, tint = Warn, modifier = Modifier.size(28.dp)) else Text("…", color = Muted, fontSize = 20.sp)
+                Text(if (item.broken) "⚠" else "…", color = Muted, fontSize = 20.sp)
             }
         }
         Column(Modifier.padding(start = 14.dp).weight(1f)) {

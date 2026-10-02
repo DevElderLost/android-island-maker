@@ -2,11 +2,11 @@ package com.megernolep.islandeditor.ui
 
 import android.net.Uri
 
-enum class Mode(val label: String) {
-    BIOME("Biome"), ROCK("Gunung"), NATURAL("Natural"), LANDMARK("Landmark"),
-    RAIL("Kereta"), PORT("Dermaga"), SPAWN("Spawn"), RAFT("Rakit"),
-    HERD("Herd"), DECOR("Hewan objek"), NPC("NPC"), BUILDING("Bangunan"),
-    TRIGGER("Zona misi"), THORN("Thornbush"), ERASE("Hapus"),
+enum class Mode(val label: String, val icon: String) {
+    BIOME("Biome", "🎨"), ROCK("Gunung", "⛰️"), NATURAL("Natural", "🌳"), LANDMARK("Landmark", "🗿"),
+    RAIL("Kereta", "🚂"), PORT("Dermaga", "⚓"), SPAWN("Spawn", "🧍"), RAFT("Rakit", "🛶"),
+    HERD("Herd", "🐾"), DECOR("Hewan objek", "🦕"), NPC("NPC", "🧑"), BUILDING("Bangunan", "🏠"),
+    TRIGGER("Zona misi", "🚩"), THORN("Thornbush", "🌵"), ERASE("Hapus", "🧽"),
 }
 
 /** Semua pengaturan alat (pilihan kuas, filter daftar, dst). Immutable; ganti lewat copy(). */

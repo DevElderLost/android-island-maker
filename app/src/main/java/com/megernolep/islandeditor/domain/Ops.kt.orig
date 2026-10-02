@@ -369,7 +369,7 @@ object Ops {
             .let { if (it > 0) bad.add("$it bangunan menimpa batu") }
         doc.npcs.count { isRock(doc, it.x, it.y) }.let { if (it > 0) bad.add("$it NPC ada di dalam batu") }
         doc.decor.count { isRock(doc, it.x, it.y) }.let { if (it > 0) bad.add("$it hewan objek ada di dalam batu") }
-        return out + (if (bad.isEmpty()) listOf("[ok] tidak ada tabrakan") else bad.map { "[!] $it" })
+        return out + (if (bad.isEmpty()) listOf("✅ tidak ada tabrakan") else bad.map { "⚠️ $it" })
     }
 
     /** Diagnosa sungai: alur terisolasi / terlalu lebar membuat sungai tampak salah di game. */
@@ -410,9 +410,9 @@ object Ops {
     fun waterReportText(d: RiverDiag): String {
         if (d.comps == 0) return "Tidak ada sungai (kode 13) di peta. Danau/laut tidak perlu dicek."
         val t = arrayListOf("${d.comps} alur sungai, ${d.tiles} tile.")
-        if (d.isolated > 0) t.add("[!] ${d.isolated} alur tidak menyentuh laut/danau → di game jadi genangan tanpa arus. Sambungkan ujungnya ke laut atau danau.")
-        if (d.fat > 0) t.add("[!] ${d.fat} alur lebih lebar dari 10 tile → lebih cocok Danau (kode 14), sungai asli 3–7 tile.")
-        if (d.isolated == 0 && d.fat == 0) t.add("[ok] Tersambung dan lebarnya wajar.")
+        if (d.isolated > 0) t.add("⚠ ${d.isolated} alur tidak menyentuh laut/danau → di game jadi genangan tanpa arus. Sambungkan ujungnya ke laut atau danau.")
+        if (d.fat > 0) t.add("⚠ ${d.fat} alur lebih lebar dari 10 tile → lebih cocok Danau (kode 14), sungai asli 3–7 tile.")
+        if (d.isolated == 0 && d.fat == 0) t.add("✓ Tersambung dan lebarnya wajar.")
         return t.joinToString("\n")
     }
 }

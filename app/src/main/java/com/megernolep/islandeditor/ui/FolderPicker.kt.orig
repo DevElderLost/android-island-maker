@@ -1,14 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material3.Icon
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.vector.ImageVector
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,9 +59,9 @@ fun FolderPicker(start: File, onPick: (File) -> Unit, onDismiss: () -> Unit) {
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     if (cur.absolutePath != root.absolutePath && cur.parentFile != null) {
-                        item { FolderRow(Icons.Filled.ArrowUpward, "..  (naik satu tingkat)") { cur = cur.parentFile ?: cur } }
+                        item { FolderRow("⬆   ..  (naik satu tingkat)") { cur = cur.parentFile ?: cur } }
                     }
-                    items(dirs, key = { it.absolutePath }) { d -> FolderRow(Icons.Filled.Folder, d.name) { cur = d } }
+                    items(dirs, key = { it.absolutePath }) { d -> FolderRow("📁   ${d.name}") { cur = d } }
                     if (dirs.isEmpty()) item { Note("Tidak ada subfolder di sini.", modifier = Modifier.padding(16.dp)) }
                 }
                 Row(
@@ -78,7 +69,7 @@ fun FolderPicker(start: File, onPick: (File) -> Unit, onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     OutlinedButton(onClick = { newName = "" }, modifier = Modifier.weight(1f)) {
-                        IconLabel(Icons.Filled.Add, "Folder baru", fontSize = 13.sp)
+                        Text("＋ Folder baru", color = TextHi, fontSize = 13.sp)
                     }
                     Button(
                         onClick = { onPick(cur) }, modifier = Modifier.weight(1f),
@@ -112,12 +103,9 @@ fun FolderPicker(start: File, onPick: (File) -> Unit, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun FolderRow(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = Muted, modifier = Modifier.size(20.dp))
-        Text(label, color = TextHi, fontSize = 14.sp, modifier = Modifier.padding(start = 14.dp))
-    }
+private fun FolderRow(label: String, onClick: () -> Unit) {
+    Text(
+        label, color = TextHi, fontSize = 14.sp,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+    )
 }

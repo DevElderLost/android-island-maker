@@ -1,8 +1,5 @@
 package com.megernolep.islandeditor.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BeachAccess
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -52,7 +49,7 @@ fun SetupScreen(
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        IconLabel(Icons.Filled.BeachAccess, "Island Editor", tint = Accent, textColor = Accent, fontSize = 22.sp, iconSize = 28.dp)
+        Text("🏝️ Island Editor", color = Accent, fontSize = 22.sp)
         Text(
             if (fromSettings) "Pengaturan penyimpanan" else "Selamat datang! Atur penyimpanan dulu sebelum mulai.",
             color = TextHi, fontSize = 15.sp,
@@ -60,7 +57,7 @@ fun SetupScreen(
 
         StepCard("1", "Izin akses file", ok = granted) {
             Note(
-                if (granted) "[ok] Izin sudah diberikan."
+                if (granted) "✓ Izin sudah diberikan."
                 else "Android 11+ butuh izin “Akses semua file” supaya proyek & hasil export bisa disimpan di folder pilihanmu.",
                 if (granted) Accent else Muted,
             )

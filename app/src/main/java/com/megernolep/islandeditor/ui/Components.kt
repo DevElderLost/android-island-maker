@@ -1,5 +1,18 @@
 package com.megernolep.islandeditor.ui
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
+
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Slider
@@ -57,10 +70,34 @@ fun Section(title: String) {
     )
 }
 
+/**
+ * Catatan kecil. Penanda status di teks diubah menjadi IKON native (bisa di posisi mana pun, juga multi-baris):
+ *   [!] = peringatan (Icons.Filled.Warning)   [x] = ditolak (Icons.Filled.Block)   [ok] = aman (Icons.Filled.CheckCircle)
+ */
+private val StatusMark = Regex("""\[(?:!|x|ok)]""")
+
 @Composable
 fun Note(text: String, color: Color = Muted, modifier: Modifier = Modifier) {
     if (text.isEmpty()) return
-    Text(text, color = color, fontSize = 12.sp, lineHeight = 17.sp, modifier = modifier.padding(vertical = 3.dp))
+    val annotated = buildAnnotatedString {
+        var last = 0
+        for (m in StatusMark.findAll(text)) {
+            append(text.substring(last, m.range.first))
+            appendInlineContent(m.value, "*")
+            last = m.range.last + 1
+        }
+        append(text.substring(last))
+    }
+    val slot = Placeholder(15.sp, 15.sp, PlaceholderVerticalAlign.TextCenter)
+    val inline = mapOf(
+        "[!]" to InlineTextContent(slot) { Icon(Icons.Filled.Warning, null, tint = Warn, modifier = Modifier.fillMaxSize()) },
+        "[x]" to InlineTextContent(slot) { Icon(Icons.Filled.Block, null, tint = Danger, modifier = Modifier.fillMaxSize()) },
+        "[ok]" to InlineTextContent(slot) { Icon(Icons.Filled.CheckCircle, null, tint = Accent, modifier = Modifier.fillMaxSize()) },
+    )
+    Text(
+        annotated, color = color, fontSize = 12.sp, lineHeight = 17.sp,
+        inlineContent = inline, modifier = modifier.padding(vertical = 3.dp),
+    )
 }
 
 @Composable
@@ -113,7 +150,7 @@ fun <T> Dropdown(value: String, options: List<Pair<T, String>>, onPick: (T) -> U
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Text(value, color = TextHi, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Text("  ▾", color = Muted)
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Muted)
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.background(SurfHi)) {
             options.forEach { (v, label) ->
