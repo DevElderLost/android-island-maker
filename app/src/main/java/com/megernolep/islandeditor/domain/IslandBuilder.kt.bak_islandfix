@@ -189,7 +189,7 @@ object IslandBuilder {
         return out
     }
 
-    private fun infoYml(spec: JSONObject, cat: Catalog, itype: String, bldEntries: List<Map<String, Any?>>): Map<String, Any?> {
+    private fun infoYml(spec: JSONObject, cat: Catalog, itype: String): Map<String, Any?> {
         val w = spec.optInt("width", W); val h = spec.optInt("height", H)
         val pre = cat.types[itype]
         val theme = THEME_BY_BIOME[itype] ?: "grassland"
@@ -224,16 +224,6 @@ object IslandBuilder {
         if (trig.isNotEmpty()) m["tutorial_triggers"] = normalizeTriggers(trig)
         val thorns = thornTiles(spec)
         if (thorns.isNotEmpty()) m["thorn_bushes"] = thorns.map { linkedMapOf<String, Any?>("x" to it.x, "y" to it.y, "prop_id" to EditorData.THORN_PROP_ID) }
-        // bangunan: x,y = POJOK footprint (indeks terkecil). Dibaca server: World.PlaceIslandBuildings
-        if (bldEntries.isNotEmpty()) {
-            m["buildings"] = bldEntries
-            m["building_anchor"] = "corner"
-        }
-        // herd dengan spesies + level dari editor. Dibaca server: AnimalManager.SpawnEditorHerds
-        herdSpawns(spec)?.let { m["herd_spawns"] = it }
-        m["island_type"] = itype
-        m["level"] = spec.optInt("level", 1)
-        m["role"] = spec.optInt("role", 4)
         val globals = spec.list("global_landmarks")
         if (globals.isNotEmpty()) {
             m["global_landmarks"] = globals.map { l ->
@@ -254,44 +244,6 @@ object IslandBuilder {
         m["tile_set"] = tileSet
         m["entry_points"] = listOf(listOf(entry.x, entry.y))
         return m
-    }
-
-    /**
-     * Bangunan -> entri info.yml. x,y di spec = titik JANGKAR (tengah / kiri-bawah, lihat building_anchor);
-     * yang ditulis = POJOK footprint (indeks terkecil), sama dengan konvensi server (World.PlaceIslandBuildings).
-     */
-    private fun buildingEntries(spec: JSONObject, cat: Catalog, warnings: MutableList<String>): List<Map<String, Any?>> {
-        val centered = spec.optString("building_anchor", "center") != "topleft"
-        val out = ArrayList<Map<String, Any?>>()
-        var oob = 0; var unknown = 0
-        for (b in spec.list("buildings")) {
-            if (!b.hasInt("x") || !b.hasInt("y")) continue
-            val et = b.optInt("entityType", 0)
-            if (et <= 0) continue
-            val info = cat.bldById[et]
-            if (info == null) unknown++
-            val w = info?.w ?: 1; val h = info?.h ?: 1
-            val x0 = b.getInt("x") - (if (centered) w / 2 else 0)
-            val y0 = b.getInt("y") - (if (centered) h / 2 else 0)
-            if (x0 < 0 || y0 < 0 || x0 + w > W || y0 + h > H) { oob++; continue }
-            out.add(linkedMapOf<String, Any?>("entityType" to et, "x" to x0, "y" to y0, "w" to w, "h" to h, "name" to (info?.name ?: "")))
-        }
-        if (oob > 0) warnings.add("$oob bangunan keluar dari peta dan TIDAK ditulis ke info.yml.")
-        if (unknown > 0) warnings.add("$unknown bangunan bertipe tidak ada di katalog editor (dianggap 1x1).")
-        return out
-    }
-
-    /** Herd per titik beserta spesies + level pilihan editor (herds.yml hanya memuat group+tile). */
-    private fun herdSpawns(spec: JSONObject): List<Map<String, Any?>>? {
-        val out = ArrayList<Map<String, Any?>>()
-        for (h in spec.list("herds")) {
-            if (!h.hasInt("x") || !h.hasInt("y")) continue
-            var et = h.optInt("entityType", 0); var lv = h.optInt("level", 0)
-            if (et >= 10000) { lv = et % 100; et /= 100 }
-            if (et <= 0) continue
-            out.add(linkedMapOf<String, Any?>("group" to h.optString("group", "land"), "x" to h.getInt("x"), "y" to h.getInt("y"), "entityType" to et, "level" to lv))
-        }
-        return if (out.isEmpty()) null else out
     }
 
     /** Peringatan spesies herd yang tidak dipakai template asli tipe ini (tetap ditulis). */
@@ -334,15 +286,13 @@ object IslandBuilder {
         if (nat.size != allNat.size) warnings.add("${allNat.size - nat.size} natural blackthorn di tile penghalang dibuang (thornbush = prop, bukan tanaman).")
 
         val landmarks = spec.list("landmarks")
-        val bldEntries = buildingEntries(spec, cat, warnings)
-        // pois.yml camp_artifacts ikut memakai POJOK footprint (bukan titik jangkar)
-        val buildings = bldEntries.map { JSONObject().put("x", it["x"]).put("y", it["y"]).put("entityType", it["entityType"]) }
+        val buildings = spec.list("buildings")
         val herds = spec.list("herds")
 
         val bos = ByteArrayOutputStream()
         ZipOutputStream(bos).use { z ->
             fun put(name: String, data: ByteArray) { z.putNextEntry(ZipEntry(name)); z.write(data); z.closeEntry() }
-            put("info.yml", PyJson.dumps(infoYml(spec, cat, itype, bldEntries)).toByteArray(Charsets.UTF_8))
+            put("info.yml", PyJson.dumps(infoYml(spec, cat, itype)).toByteArray(Charsets.UTF_8))
             put("config.yml", PyJson.dumps(linkedMapOf("theme" to (THEME_BY_BIOME[itype] ?: "grassland"))).toByteArray(Charsets.UTF_8))
             put("whole.biomes", biomes)
             put("whole.ocean", water.ocean)
@@ -353,7 +303,7 @@ object IslandBuilder {
             herdsYml(herds)?.let { put("herds.yml", it.toByteArray(Charsets.UTF_8)) }
         }
         val summary = "tipe $itype · ${nat.size} natural · ${landmarks.size} landmark · " +
-            "${spec.list("global_landmarks").size} landmark global · ${spec.list("npcs").size} npc · ${bldEntries.size} bangunan · " +
+            "${spec.list("global_landmarks").size} landmark global · ${spec.list("npcs").size} npc · " +
             "${spec.list("static_animals").size} hewan-objek · ${herds.size} herd · ${warpholes.size} warp hole · ${rifts.size} rift"
         return Output(bos.toByteArray(), "$tid.zip", warnings, summary)
     }
