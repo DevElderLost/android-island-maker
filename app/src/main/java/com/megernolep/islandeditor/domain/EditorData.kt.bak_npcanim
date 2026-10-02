@@ -120,11 +120,6 @@ object EditorData {
     const val NPC_MAX_LINES = 8
     const val NPC_MAX_LINE_LEN = 80
 
-    /** Animasi custom memakai aturan yang sama dengan teks chat: hanya NPC bot selain K, T (cerita) dan Charlie. */
-    fun npcAllowsAnims(id: String): Boolean = npcAllowsLines(id)
-    const val NPC_MAX_ANIMS = 6
-    val animIdRe = Regex("^[A-Za-z0-9_]{1,64}$")
-
     val npcAll: List<NpcDef> = npcStory + npcBots
     val npcById: Map<String, NpcDef> = npcAll.associateBy { it.id }
 

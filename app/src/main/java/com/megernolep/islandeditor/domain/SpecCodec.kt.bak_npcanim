@@ -69,8 +69,6 @@ object SpecCodec {
                     .also { o ->
                         val ls = if (EditorData.npcAllowsLines(n.id)) Ops.cleanLines(n.lines) else emptyList()
                         if (ls.isNotEmpty()) o.put("lines", JSONArray(ls))
-                        val an = if (EditorData.npcAllowsAnims(n.id)) Ops.cleanAnims(n.anims) else emptyList()
-                        if (an.isNotEmpty()) o.put("anims", JSONArray(an))
                     }
             }
         }))
@@ -158,7 +156,6 @@ object SpecCodec {
             else Npc(
                 info.id, "bot", n.optInt("x"), n.optInt("y"), radius = n.optInt("radius", 0),
                 lines = n.optJSONArray("lines")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
-                anims = n.optJSONArray("anims")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
             )
         }
 

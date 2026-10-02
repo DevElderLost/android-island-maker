@@ -156,8 +156,7 @@ object Ops {
     fun putNpc(doc: Doc, id: String, x: Int, y: Int, radius: Int): Doc {
         val info = EditorData.npcById[id] ?: return doc
         val oldLines = doc.npcs.firstOrNull { it.id == id }?.lines ?: emptyList()   // pindah NPC tidak menghapus teks chat-nya
-        val oldAnims = doc.npcs.firstOrNull { it.id == id }?.anims ?: emptyList()   // pindah NPC tidak menghapus animasinya
-        val n = if (info.kind == "story") Npc(id, "story", x, y, epic = info.epic) else Npc(id, "bot", x, y, radius = radius, lines = oldLines, anims = oldAnims)
+        val n = if (info.kind == "story") Npc(id, "story", x, y, epic = info.epic) else Npc(id, "bot", x, y, radius = radius, lines = oldLines)
         return doc.copy(npcs = doc.npcs.filter { it.id != id } + n)
     }
 
@@ -171,17 +170,6 @@ object Ops {
     fun cleanLines(lines: List<String>): List<String> =
         lines.map { it.trim() }.filter { it.isNotEmpty() }
             .map { it.take(EditorData.NPC_MAX_LINE_LEN) }.take(EditorData.NPC_MAX_LINES)
-
-    /** Set animasi aktivitas NPC bot [id] (hanya NPC yang sudah ditaruh & boleh punya animasi custom). */
-    fun setNpcAnims(doc: Doc, id: String, anims: List<String>): Doc {
-        if (!EditorData.npcAllowsAnims(id)) return doc
-        return doc.copy(npcs = doc.npcs.map { if (it.id == id) it.copy(anims = cleanAnims(anims)) else it })
-    }
-
-    /** Bersihkan untuk disimpan: nama klip valid, tanpa duplikat, maksimal NPC_MAX_ANIMS. */
-    fun cleanAnims(anims: List<String>): List<String> =
-        anims.map { it.trim() }.filter { it.isNotEmpty() && EditorData.animIdRe.matches(it) }
-            .distinct().take(EditorData.NPC_MAX_ANIMS)
 
     /** Taruh K & T di posisi tetap level [lv] (0-based). Hasil: (doc, nama NPC yang jatuh di air). */
     fun storyPreset(doc: Doc, lv: Int): Pair<Doc, List<String>> {

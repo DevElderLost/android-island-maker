@@ -275,59 +275,10 @@ private fun NpcPanel(vm: EditorViewModel) {
     } else if (def != null) {
         Note("${def.name}: dialog diatur skrip cerita/quest, teks custom tidak tersedia.")
     }
-    if (def != null && EditorData.npcAllowsAnims(def.id)) {
-        NpcAnimSection(vm, def)
-    } else if (def != null) {
-        Note("${def.name}: animasi diatur skrip cerita/quest, pilihan animasi tidak tersedia.")
-    }
     Section("Preset K & T (posisi tetap tutorial)")
     IntChips(listOf(1, 2, 3, 4, 5), o.npcPresetLv, "") { v -> vm.setOpts { it.copy(npcPresetLv = v) } }
     OutlinedButton(onClick = { vm.placeStoryPreset() }, modifier = Modifier.padding(top = 6.dp)) { Text("Taruh K & T level ${o.npcPresetLv}") }
     Note("Terpasang: ${vm.doc.npcs.size} NPC")
-}
-
-// ---- animasi aktivitas NPC bot (data: assets/npc_anims.json <- player_animation_clips.txt) ----
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun NpcAnimSection(vm: EditorViewModel, def: NpcDef) {
-    Section("Animasi NPC")
-    if (!vm.npcPlaced(def.id)) {
-        Note("Taruh ${def.name} di peta dulu, lalu pilih animasinya di sini.")
-        return
-    }
-    val all = vm.npcAnimCatalog
-    if (all.isEmpty()) {
-        Note("[!] Katalog animasi (assets/npc_anims.json) tidak terbaca.")
-        return
-    }
-    val cats = NpcAnims.categories(all)
-    val cat = vm.opts.npcAnimCat.takeIf { it in cats } ?: cats.first()
-    val chosen = vm.npcAnims(def.id)
-    Chips(cats.map { it to it }, cat) { c -> vm.setOpts { it.copy(npcAnimCat = c) } }
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.padding(top = 8.dp),
-    ) {
-        all.filter { it.cat == cat }.forEach { a ->
-            val on = a.id in chosen
-            Box(
-                Modifier.clip(RoundedCornerShape(50))
-                    .background(if (on) Accent else SurfHi)
-                    .border(1.dp, if (on) Accent else Outline, RoundedCornerShape(50))
-                    .clickable { vm.toggleNpcAnim(def.id, a.id) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) { Text(a.label, color = if (on) Bg else TextHi, fontSize = 12.sp) }
-        }
-    }
-    Note(
-        if (chosen.isEmpty()) "Belum ada pilihan: NPC memakai animasi bawaannya."
-        else "Dipilih (${chosen.size}/${EditorData.NPC_MAX_ANIMS}): " + chosen.joinToString(", ") { id -> all.firstOrNull { it.id == id }?.label ?: id },
-        modifier = Modifier.padding(top = 6.dp),
-    )
-    if (chosen.isNotEmpty()) {
-        OutlinedButton(onClick = { vm.clearNpcAnims(def.id) }) { Text("Hapus semua animasi") }
-    }
-    Note("NPC memainkan animasi terpilih secara acak di sela jalan-jalan. Hanya terlihat di game, bukan di peta editor.")
 }
 
 // ---------------------------------------------------------------- BANGUNAN

@@ -54,7 +54,6 @@ class TileHit(val x: Int, val y: Int, val inside: Boolean)
  */
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
     val catalog: Catalog = Catalog.load(app)
-    val npcAnimCatalog: List<NpcAnim> = NpcAnims.load(app)
     private val prefs = app.getSharedPreferences("island_editor", Context.MODE_PRIVATE)
 
     // ---------------- state dokumen ----------------
@@ -735,30 +734,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     /** Dipanggil tiap ketikan: tanpa undo-snapshot (supaya tumpukan undo tidak penuh), baris kosong sementara dipertahankan. */
     fun setNpcLinesText(id: String, text: String) {
         doc = Ops.setNpcLines(doc, id, text.split("\n"))
-        rev++
-    }
-
-    /** Animasi aktivitas NPC [id] (nama klip); kosong bila belum ditaruh / belum dipilih. */
-    fun npcAnims(id: String): List<String> = doc.npcs.firstOrNull { it.id == id }?.anims ?: emptyList()
-
-    /** Pilih / batalkan satu animasi untuk NPC [id] (maks EditorData.NPC_MAX_ANIMS). Tidak mengubah bitmap peta. */
-    fun toggleNpcAnim(id: String, clip: String) {
-        if (!EditorData.npcAllowsAnims(id) || !npcPlaced(id)) return
-        val cur = npcAnims(id)
-        if (clip !in cur && cur.size >= EditorData.NPC_MAX_ANIMS) {
-            hint = "[!] Maksimal ${EditorData.NPC_MAX_ANIMS} animasi per NPC."
-            return
-        }
-        pushUndo(doc.deepCopy())
-        doc = Ops.setNpcAnims(doc, id, if (clip in cur) cur - clip else cur + clip)
-        hint = ""
-        rev++
-    }
-
-    fun clearNpcAnims(id: String) {
-        if (npcAnims(id).isEmpty()) return
-        pushUndo(doc.deepCopy())
-        doc = Ops.setNpcAnims(doc, id, emptyList())
         rev++
     }
 

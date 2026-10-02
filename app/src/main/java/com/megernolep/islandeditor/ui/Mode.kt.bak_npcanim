@@ -29,7 +29,6 @@ data class ToolOpts(
     val selDecor: Int = 2133, val decSearch: String = "", val decRot: Int = 0,
     // NPC
     val selNpc: String = "story_k", val npcSearch: String = "", val npcRadius: Int = 6, val npcPresetLv: Int = 1,
-    val npcAnimCat: String = "",
     // bangunan
     val selBuilding: Int = 9450, val bldCat: String = "*",
     // zona pemicu
