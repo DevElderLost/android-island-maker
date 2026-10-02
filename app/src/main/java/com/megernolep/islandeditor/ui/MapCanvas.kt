@@ -324,8 +324,9 @@ private fun DrawScope.drawLayers(vm: EditorViewModel, px: (Float) -> Float) {
                 translate(l.cx, l.cy)
                 rotate(l.rotDeg, Offset.Zero)
                 scale(s, s, Offset.Zero)
+                translate(-bmp.width / 2f, -bmp.height / 2f)
             }) {
-                drawImage(bmp, topLeft = Offset(-bmp.width / 2f, -bmp.height / 2f), alpha = l.opacity, filterQuality = FilterQuality.Medium)
+                drawImage(bmp, alpha = l.opacity, filterQuality = FilterQuality.Medium)
             }
         }
     }
