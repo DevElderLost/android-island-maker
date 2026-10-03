@@ -104,7 +104,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var seedServer by mutableStateOf(prefs.getBoolean("seed_server", false))
         private set
     val canSeed: Boolean get() = AppSettings.serverDir(getApplication<Application>()) != null
-    @JvmName("applySeedServer")
     fun setSeedServer(v: Boolean) { seedServer = v; prefs.edit().putBoolean("seed_server", v).apply() }
 
     val rockMarks = mutableStateMapOf<Int, String>()
