@@ -19,9 +19,7 @@ import kotlin.math.roundToInt
  *  - kosong                       -> acak (kode yang dipakai ditampilkan & disimpan di spec supaya bisa diulang)
  *
  * Seed + tipe + ukuran yang sama  => bentuk daratan, pantai, danau, sungai, batu, dermaga, spawn & rakit SELALU sama.
- * Empat switch isi terpisah (supaya sisanya bisa dikerjakan manual): natural (+batu landmark), hewan, bangunan,
- * ikan/kerang/udang. Biota air ditaruh per zona dan dijaga sedikit: ikan laut hanya di perairan dekat pantai,
- * ikan sungai di sungai, ikan danau di danau, kerang di pantai dekat air, udang di air dangkal dekat pantai.
+ * Tiga switch isi terpisah (supaya sisanya bisa dikerjakan manual): natural (+batu landmark), hewan, bangunan.
  * Hewan: spesies HANYA dari preset tipe pulau itu sendiri (tanpa pinjam tipe lain), level dari preset,
  * dikelompokkan per spesies dalam satu titik (cluster), dan TIDAK PERNAH di laut (grup "ocean" tidak dibuat).
  * Isi pulau (natural / landmark / herd) mengikuti data referensi:
@@ -45,8 +43,6 @@ object SeedGen {
         val animals: Boolean = true,
         /** kamp awal (bangunan) dekat spawn */
         val buildings: Boolean = true,
-        /** ikan laut/sungai/danau + kerang + udang (natural air, jumlahnya dibatasi) */
-        val aquatic: Boolean = true,
         /** folder data server (boleh null) */
         val serverDir: File? = null,
     )
@@ -157,24 +153,6 @@ object SeedGen {
         "volcanic" to listOf("Cliff/Volcanic"),
     )
 
-    // ---- biota air ----
-    private val AQUATIC_NAMES = setOf("School Of Fish", "Clams", "Group Of Shrimp")
-    private const val SHRIMP_ID = 11074
-
-    private class AqSet(val sea: List<Int>, val river: List<Int>, val lake: List<Int>)
-
-    /** ID ikan per tipe (hasil analisis terrain server: tiap tipe memakai varian ikan sendiri) */
-    private val FISH = mapOf(
-        "temperate_forest" to AqSet(listOf(12119), listOf(12118), listOf(12120)),
-        "tropical_forest" to AqSet(listOf(12174), listOf(12173), listOf(12175)),
-        "grassland" to AqSet(listOf(12119, 12174), listOf(12118, 12173), listOf(12120, 12175)),
-        "tundra" to AqSet(listOf(12119), listOf(12118), listOf(12120)),
-        "snow_field" to AqSet(listOf(12119), listOf(12118), listOf(12120)),
-        "desert" to AqSet(listOf(12119), listOf(12118), listOf(12120)),
-        "swamp_mud" to AqSet(listOf(12119), listOf(12118), listOf(12120)),
-        "volcanic" to AqSet(listOf(16031), emptyList(), emptyList()),
-    )
-
     private val LAKE_RE = Regex("\"lake_biome\"\\s*:\\s*\"([^\"]+)\"")
     private val HERD_GROUP_RE = Regex("^\\s{2}(\\w+):\\s*$")
 
@@ -196,7 +174,7 @@ object SeedGen {
     private fun le16(b: ByteArray, o: Int): Int = (b[o].toInt() and 0xFF) or (b[o + 1].toInt() shl 8)
 
     /** Baca terrain asli di folder server yang lake_biome-nya = [lake]. null kalau tidak ada yang cocok. */
-    private fun loadProfile(serverDir: File, lake: String, skip: Set<Int>, notes: MutableList<String>): Profile? {
+    private fun loadProfile(serverDir: File, lake: String, notes: MutableList<String>): Profile? {
         val root = ServerSeed.findRoot(serverDir) ?: run {
             notes.add("Folder data server tidak berisi islands.json — memakai katalog bawaan editor.")
             return null
@@ -228,7 +206,6 @@ object SeedGen {
             while (i + 6 <= garden.size) {
                 val x = le16(garden, i); val y = le16(garden, i + 2); val et = le16(garden, i + 4)
                 i += 6
-                if (et in skip) continue                       // ikan/kerang/udang ditangani terpisah (zona + jumlah dibatasi)
                 if (x !in 0 until W || y !in 0 until H) continue
                 val raw = bio[y * W + x].toInt() and 0xFF
                 if ((raw and FLAGS_ROCK) == FLAGS_ROCK) continue
@@ -417,24 +394,6 @@ object SeedGen {
                 if (x in 0 until W && y in 0 until H) f(x, y)
             }
         }
-    }
-
-    /** Sebar [want] titik dari [cands] dengan jarak minimum [spacing]; tile yang sudah terisi dilewati. */
-    private fun scatter(cands: MutableList<Int>, want: Int, spacing: Int, taken: BooleanArray, rng: Rng, out: (Int) -> Unit): Int {
-        rng.shuffle(cands)
-        val blk = BooleanArray(W * H)
-        var n = 0
-        for (t in cands) {
-            if (n >= want) break
-            if (taken[t] || blk[t]) continue
-            taken[t] = true; n++; out(t)
-            val x = t % W; val y = t / W
-            for (dy in -spacing..spacing) for (dx in -spacing..spacing) {
-                val nx = x + dx; val ny = y + dy
-                if (nx in 0 until W && ny in 0 until H) blk[ny * W + nx] = true
-            }
-        }
-        return n
     }
 
     // ------------------------------------------------------------------ generate
@@ -658,9 +617,6 @@ object SeedGen {
         val landmarks = ArrayList<Landmark>()
         val herds = ArrayList<Herd>()
         val buildings = ArrayList<Building>()
-        val taken = BooleanArray(W * H)
-        val aquaticIds = cat.naturals.filter { it.name in AQUATIC_NAMES }.map { it.id }.toSet()
-        val lakeEdge = bfs(BooleanArray(W * H) { code(it) != lakeCode }) { code(it) == lakeCode }
 
         // 7a. bangunan: kamp awal kecil di area spawn (9x9 bebas batu)
         if (opt.buildings) {
@@ -685,7 +641,7 @@ object SeedGen {
         if (opt.naturals || opt.animals) {
             var profile: Profile? = null
             if (opt.serverDir != null) {
-                profile = try { loadProfile(opt.serverDir, pre.lakeBiome, aquaticIds, notes) } catch (e: Exception) { notes.add("Data server gagal dibaca (${e.message}) — memakai katalog bawaan."); null }
+                profile = try { loadProfile(opt.serverDir, pre.lakeBiome, notes) } catch (e: Exception) { notes.add("Data server gagal dibaca (${e.message}) — memakai katalog bawaan."); null }
                 if (profile == null && notes.none { it.startsWith("Folder data server") || it.startsWith("Data server gagal") }) {
                     notes.add("Tidak ada terrain server dengan biome '${pre.lakeBiome}' — memakai katalog bawaan editor.")
                 }
@@ -697,6 +653,7 @@ object SeedGen {
             if (opt.naturals) {
                 val rngNat = Rng(sub(seed, 14))
                 val nGrove = Noise(sub(seed, 15))
+                val taken = BooleanArray(W * H)
                 for (y in 0 until H) for (x in 0 until W) {
                     val i = y * W + x
                     if (reserved[i] || isRock(i)) continue
@@ -731,6 +688,7 @@ object SeedGen {
             // 7c. hewan: berkelompok per spesies, hanya di darat/pantai/danau (TIDAK PERNAH laut)
             if (opt.animals) {
                 val rngHerd = Rng(sub(seed, 17))
+                val lakeEdge = bfs(BooleanArray(W * H) { code(it) != lakeCode }) { code(it) == lakeCode }
                 val own = cat.species[opt.type].orEmpty()
                 val defaults = mapOf("land" to 120, "beach" to 60, "lake_shallow" to 40, "lake_deep" to 20)
                 val occupied = BooleanArray(W * H)
@@ -835,64 +793,6 @@ object SeedGen {
                 if (herds.isEmpty()) notes.add("Tidak ada herd: tipe '${opt.type}' tidak punya spesies untuk grup yang tersedia di medan ini.")
                 else notes.add("Hewan: $clusterTotal kelompok (1 spesies per titik), semua di darat/pantai/danau — tidak ada di laut.")
             }
-        }
-
-        // 7d. biota air: dibatasi + per zona (bukan tersebar di seluruh laut)
-        if (opt.aquatic) {
-            val rngAq = Rng(sub(seed, 19))
-            val nClam = Noise(sub(seed, 20))
-            val dLand = bfs(BooleanArray(W * H) { !sea[it] }) { sea[it] }
-            var coast = 0
-            for (i in raw.indices) if (sea[i] && dLand[i] == 1) coast++
-            val fish = FISH[opt.type] ?: FISH.getValue("temperate_forest")
-            fun valid(ids: List<Int>, zoneCode: Int) = ids.filter { cat.natById[it]?.biomes?.contains(zoneCode) == true }
-            fun pickId(ids: List<Int>) = ids[rngAq.nextInt(ids.size)]
-            var nSea = 0; var nShrimp = 0; var nRiver = 0; var nLake = 0; var nClamPts = 0
-
-            // ikan laut: hanya di perairan dekat pantai (4-14 tile dari daratan), jarang
-            val seaIds = valid(fish.sea, oceanCode)
-            if (seaIds.isNotEmpty() && coast > 0) {
-                val cand = ArrayList<Int>()
-                for (i in raw.indices) if (sea[i] && !reserved[i] && dLand[i] in 4..14) cand.add(i)
-                val want = ((coast / 14).coerceIn(10, 55) * sizeScale).roundToInt()
-                nSea = scatter(cand, want, 9, taken, rngAq) { naturals.add(Natural(it % W, it / W, pickId(seaIds))) }
-            }
-            // udang: air dangkal tepat di tepi pantai (1-3 tile dari daratan)
-            if (cat.natById[SHRIMP_ID]?.biomes?.contains(oceanCode) == true && coast > 0) {
-                val cand = ArrayList<Int>()
-                for (i in raw.indices) if (sea[i] && !reserved[i] && dLand[i] in 1..3) cand.add(i)
-                val want = ((coast / 40).coerceIn(6, 28) * sizeScale).roundToInt()
-                nShrimp = scatter(cand, want, 6, taken, rngAq) { naturals.add(Natural(it % W, it / W, SHRIMP_ID)) }
-            }
-            // ikan sungai
-            val riverIds = valid(fish.river, 13)
-            if (riverIds.isNotEmpty() && !pre.lava) {
-                val cand = ArrayList<Int>()
-                for (i in raw.indices) if (code(i) == 13 && !reserved[i]) cand.add(i)
-                if (cand.size >= 8) nRiver = scatter(cand, (cand.size / 16).coerceIn(2, 12), 5, taken, rngAq) { naturals.add(Natural(it % W, it / W, pickId(riverIds))) }
-            }
-            // ikan danau (bukan danau lava)
-            val lakeIds = valid(fish.lake, lakeCode)
-            if (lakeIds.isNotEmpty() && !pre.lava) {
-                val all = ArrayList<Int>(); val inner = ArrayList<Int>()
-                for (i in raw.indices) if (code(i) == lakeCode && !reserved[i]) { all.add(i); if (lakeEdge[i] >= 1) inner.add(i) }
-                if (all.size >= 12) nLake = scatter(if (inner.size >= 6) inner else all, (all.size / 45).coerceIn(1, 10), 4, taken, rngAq) { naturals.add(Natural(it % W, it / W, pickId(lakeIds))) }
-            }
-            // kerang: pantai tepat di tepi air, berkelompok (noise), jumlah dibatasi
-            val clamId = when {
-                cat.natById[12121]?.biomes?.contains(pre.beach) == true -> 12121
-                cat.natById[11198]?.biomes?.contains(pre.beach) == true -> 11198
-                else -> 0
-            }
-            if (clamId != 0) {
-                val cand = ArrayList<Int>()
-                for (i in raw.indices) {
-                    if (code(i) != pre.beach || isRock(i) || reserved[i] || dist[i] !in 1..3) continue
-                    if (nClam.fbm((i % W) / 10.0, (i / W) / 10.0, 2) > 0.42) cand.add(i)
-                }
-                nClamPts = scatter(cand, ((cand.size / 14).coerceIn(10, 80) * sizeScale).roundToInt(), 2, taken, rngAq) { naturals.add(Natural(it % W, it / W, clamId)) }
-            }
-            notes.add("Biota air: $nSea ikan laut (dekat pantai) · $nShrimp udang · $nRiver ikan sungai · $nLake ikan danau · $nClamPts kerang")
         }
 
         val doc = Doc(

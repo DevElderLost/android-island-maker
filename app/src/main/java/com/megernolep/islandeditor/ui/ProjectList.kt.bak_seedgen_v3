@@ -210,10 +210,10 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
         return f
     }
 
-    // SEED_GEN v3: proyek baru dari kode seed. Jalan di thread IO; hasil lewat callback (thread utama).
+    // SEED_GEN v2: proyek baru dari kode seed. Jalan di thread IO; hasil lewat callback (thread utama).
     fun createSeededProject(
         rawId: String, type: String, level: Int, seedText: String, size: Int,
-        naturals: Boolean, animals: Boolean, buildings: Boolean, aquatic: Boolean,
+        naturals: Boolean, animals: Boolean, buildings: Boolean,
         onDone: (File) -> Unit, onError: (String) -> Unit,
     ) {
         val ctx = getApplication<Application>()
@@ -230,7 +230,7 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
                     val res = SeedGen.generate(
                         SeedGen.Options(
                             seed = seedText, type = type, level = level, templateId = id, size = size,
-                            naturals = naturals, animals = animals, buildings = buildings, aquatic = aquatic,
+                            naturals = naturals, animals = animals, buildings = buildings,
                             serverDir = AppSettings.serverDir(ctx),
                         ),
                         catalog,
@@ -420,7 +420,7 @@ private fun ProjectCard(item: ProjectItem, sub: String, onClick: () -> Unit, onL
     }
 }
 
-// SEED_GEN v3: dialog proyek baru + opsi "kode seed" + switch natural / hewan / bangunan / ikan
+// SEED_GEN v2: dialog proyek baru + opsi "kode seed" + switch natural / hewan / bangunan
 @Composable
 private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, onCreated: (File) -> Unit) {
     var id by remember { mutableStateOf(vm.suggestId()) }
@@ -433,7 +433,6 @@ private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, on
     var naturals by remember { mutableStateOf(true) }
     var animals by remember { mutableStateOf(true) }
     var buildings by remember { mutableStateOf(true) }
-    var aquatic by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() }, containerColor = SurfHi,
@@ -454,8 +453,7 @@ private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, on
                     CheckRow("Natural (tumbuhan, batu & landmark)", naturals) { naturals = it }
                     CheckRow("Hewan (kelompok per spesies, tidak di laut)", animals) { animals = it }
                     CheckRow("Bangunan (kamp awal dekat spawn)", buildings) { buildings = it }
-                    CheckRow("Ikan, kerang & udang (per zona, jumlah dibatasi)", aquatic) { aquatic = it }
-                    Note("Medan, dermaga, spawn & rakit selalu dibuat dari seed. Matikan switch yang ingin diisi manual. Seed + tipe + ukuran yang sama menghasilkan bentuk pulau yang sama. Ikan laut hanya dekat pantai, ikan sungai di sungai, ikan danau di danau, kerang di pantai, udang di air dangkal tepi pantai. Hewan hanya memakai spesies tipe pulau ini; isi pulau mengikuti terrain asli di folder data server (bila diatur), kalau tidak memakai katalog bawaan.")
+                    Note("Medan, dermaga, spawn & rakit selalu dibuat dari seed. Matikan switch yang ingin diisi manual. Seed + tipe + ukuran yang sama menghasilkan bentuk pulau yang sama. Hewan hanya memakai spesies tipe pulau ini; isi pulau mengikuti terrain asli di folder data server (bila diatur), kalau tidak memakai katalog bawaan.")
                 }
                 Note(error, Danger)
             }
@@ -466,7 +464,7 @@ private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, on
                 if (useSeed) {
                     busy = true; error = ""
                     vm.createSeededProject(
-                        id, type, lv, seed, size, naturals, animals, buildings, aquatic,
+                        id, type, lv, seed, size, naturals, animals, buildings,
                         onDone = { busy = false; onCreated(it) },
                         onError = { busy = false; error = it },
                     )
