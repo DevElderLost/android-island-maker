@@ -26,6 +26,7 @@ class SetupActivity : ComponentActivity() {
     private var granted by mutableStateOf(false)
     private var projectDir by mutableStateOf(File("/"))
     private var exportDir by mutableStateOf(File("/"))
+    private var serverDir by mutableStateOf<File?>(null)
     private var fromSettings = false
 
     // Android 10: izin baca/tulis storage biasa
@@ -42,14 +43,17 @@ class SetupActivity : ComponentActivity() {
         fromSettings = intent.getBooleanExtra("from_settings", false)
         projectDir = AppSettings.projectDir(this)
         exportDir = AppSettings.exportDir(this)
+        serverDir = AppSettings.serverDir(this)
         granted = AppSettings.hasStorageAccess(this)
         setContent {
             IslandTheme {
                 SetupScreen(
-                    granted = granted, projectDir = projectDir, exportDir = exportDir, fromSettings = fromSettings,
+                    granted = granted, projectDir = projectDir, exportDir = exportDir, serverDir = serverDir, fromSettings = fromSettings,
                     onRequestPermission = { requestAccess() },
                     onPickProject = { projectDir = it },
                     onPickExport = { exportDir = it },
+                    onPickServer = { serverDir = it },
+                    onClearServer = { serverDir = null },
                     onFinish = { finishSetup() },
                 )
             }
@@ -82,7 +86,13 @@ class SetupActivity : ComponentActivity() {
             Toast.makeText(this, "Gagal: ${e.message}", Toast.LENGTH_LONG).show()
             return
         }
+        val sd = serverDir
+        if (sd != null && com.megernolep.islandeditor.domain.ServerSeed.findRoot(sd) == null) {
+            Toast.makeText(this, "islands.json tidak ditemukan di folder data server itu", Toast.LENGTH_LONG).show()
+            return
+        }
         AppSettings.saveSetup(this, projectDir, exportDir)
+        AppSettings.saveServerDir(this, sd)
         if (!fromSettings) startActivity(Intent(this, ProjectListActivity::class.java))
         finish()
     }

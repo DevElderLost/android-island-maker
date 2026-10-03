@@ -39,10 +39,13 @@ fun SetupScreen(
     granted: Boolean,
     projectDir: File,
     exportDir: File,
+    serverDir: File?,
     fromSettings: Boolean,
     onRequestPermission: () -> Unit,
     onPickProject: (File) -> Unit,
     onPickExport: (File) -> Unit,
+    onPickServer: (File) -> Unit,
+    onClearServer: () -> Unit,
     onFinish: () -> Unit,
 ) {
     var picking by remember { mutableIntStateOf(0) }   // 0 = tidak, 1 = folder proyek, 2 = folder export
@@ -82,6 +85,17 @@ fun SetupScreen(
             OutlinedButton(onClick = { picking = 2 }, enabled = granted) { Text("Pilih folder", color = TextHi) }
         }
 
+        StepCard("4", "Folder data server (opsional)", ok = granted && serverDir != null) {
+            Note(
+                serverDir?.absolutePath ?: "Belum diatur. Pilih folder data server (berisi islands.json) untuk fitur Seed ke data server.",
+                if (serverDir != null) TextHi else Muted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { picking = 3 }, enabled = granted) { Text("Pilih folder", color = TextHi) }
+                if (serverDir != null) OutlinedButton(onClick = onClearServer, enabled = granted) { Text("Hapus", color = TextHi) }
+            }
+        }
+
         Button(
             onClick = onFinish, enabled = granted, modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Bg),
@@ -90,8 +104,19 @@ fun SetupScreen(
 
     if (picking != 0) {
         FolderPicker(
-            start = if (picking == 1) projectDir else exportDir,
-            onPick = { f -> if (picking == 1) onPickProject(f) else onPickExport(f); picking = 0 },
+            start = when (picking) {
+                1 -> projectDir
+                2 -> exportDir
+                else -> serverDir ?: exportDir
+            },
+            onPick = { f ->
+                when (picking) {
+                    1 -> onPickProject(f)
+                    2 -> onPickExport(f)
+                    else -> onPickServer(f)
+                }
+                picking = 0
+            },
             onDismiss = { picking = 0 },
         )
     }

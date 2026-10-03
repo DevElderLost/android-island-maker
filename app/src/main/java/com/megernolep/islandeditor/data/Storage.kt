@@ -28,6 +28,13 @@ object AppSettings {
 
     fun isSetupDone(ctx: Context): Boolean = prefs(ctx).getBoolean(K_SETUP, false)
 
+    // SERVER_SEED: folder data server (opsional) untuk fitur "Seed ke data server"
+    private const val K_SERVER = "server_dir"
+    fun serverDir(ctx: Context): File? = prefs(ctx).getString(K_SERVER, null)?.takeIf { it.isNotBlank() }?.let { File(it) }
+    fun saveServerDir(ctx: Context, dir: File?) {
+        prefs(ctx).edit().apply { if (dir == null) remove(K_SERVER) else putString(K_SERVER, dir.absolutePath) }.apply()
+    }
+
     fun saveSetup(ctx: Context, project: File, export: File) {
         prefs(ctx).edit()
             .putString(K_PROJECT, project.absolutePath)

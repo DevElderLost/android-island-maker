@@ -100,6 +100,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var clearPrompt by mutableStateOf(false)
 
+    /** SERVER_SEED: opsional — saat "Export as Island", daftarkan pulau ke folder data server (lihat ServerSeed). */
+    var seedServer by mutableStateOf(prefs.getBoolean("seed_server", false))
+        private set
+    val canSeed: Boolean get() = AppSettings.serverDir(getApplication<Application>()) != null
+    fun setSeedServer(v: Boolean) { seedServer = v; prefs.edit().putBoolean("seed_server", v).apply() }
+
     val rockMarks = mutableStateMapOf<Int, String>()
     private val natVisCache = HashMap<Int, Pair<Int, Float>>()
 
@@ -1053,15 +1059,33 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val (meta, file) = result
                 val saved = withContext(Dispatchers.IO) { writeOutput(kind, file.first, file.second) }
+                val seed: ServerSeed.Result? = if (kind == ExportKind.ISLAND && seedServer) {
+                    withContext(Dispatchers.IO) { runSeed(file.first.removeSuffix(".zip"), copy.level, file.second) }
+                } else {
+                    null
+                }
                 exportResult = meta.copy(
                     path = saved.absolutePath,
                     uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", saved),
+                    details = meta.details + (seed?.lines ?: emptyList()),
+                    warnings = meta.warnings + (seed?.warnings ?: emptyList()),
                 )
             } catch (e: Exception) {
                 toast = "Gagal export: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 busy = false
             }
+        }
+    }
+
+    /** SERVER_SEED: daftarkan pulau ke folder data server; kegagalan hanya jadi peringatan (zip export tetap aman). */
+    private fun runSeed(tid: String, level: Int, zip: ByteArray): ServerSeed.Result {
+        val dir = AppSettings.serverDir(getApplication<Application>())
+            ?: return ServerSeed.Result(emptyList(), listOf("Seed server dilewati: folder data server belum diatur (Pengaturan)."))
+        return try {
+            ServerSeed.apply(dir, tid, zip, level)
+        } catch (e: Exception) {
+            ServerSeed.Result(emptyList(), listOf("Seed server gagal: ${e.message ?: e.javaClass.simpleName}"))
         }
     }
 

@@ -224,6 +224,7 @@ private fun ModeBar(vm: EditorViewModel) {
 @Composable
 private fun ActionBar(vm: EditorViewModel, onImport: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(Surf).padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (vm.canSeed) CheckRow("Seed ke data server saat Export as Island", vm.seedServer) { vm.setSeedServer(it) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconBtn(IconKind.TRASH, tint = Danger) { vm.clearPrompt = true }
             OutlinedButton(

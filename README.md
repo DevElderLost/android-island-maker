@@ -36,3 +36,15 @@ ui/                Compose: EditorViewModel, MapCanvas, Panels, EditorScreen, Th
 CI: `.github/workflows/build-apk.yml` (artifact `island-editor-debug-apk`).
 Lokal: Android Studio (JDK 17) atau `gradle assembleDebug`.
 Versi: AGP 8.1.4 · Gradle 8.4 · Kotlin 1.9.22 · Compose compiler 1.5.10 · Compose BOM 2024.02.00.
+
+## Seed ke data server (opsional) — SERVER_SEED
+
+1. **Pengaturan → langkah 4 "Folder data server"**: pilih folder `data/` server (yang berisi `islands.json`).
+2. Di editor muncul saklar **Seed ke data server**. Bila aktif, **Export as Island** juga mendaftarkan pulau ke server:
+   `terrains/<id>.zip`, entri baru di `islands.json` (Id `isleNN` berikutnya, port tertinggi + 100),
+   template baru di `assets/region_templates.json` (salinan template sebiome dengan level terdekat),
+   dan `islands/<isleNN>/config.json` (salinan config pulau sebiome; `RegionTemplateId` diganti).
+3. Aman diulang: entri yang sudah ada tidak ditimpa (hanya zip terrain yang diganti). Restart server setelahnya.
+
+Catatan: `Spawn`/`Zones` di config baru hanya salinan pulau dasar — sesuaikan hewannya bila perlu.
+`archipelago_templates.json` tidak disentuh.
