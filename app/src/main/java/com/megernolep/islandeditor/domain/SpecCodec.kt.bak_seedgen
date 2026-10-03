@@ -80,7 +80,6 @@ object SpecCodec {
         }))
         spec.put("buildings", JSONArray(doc.buildings.map { pt(it.x, it.y).put("entityType", it.entityType) }))
         spec.put("building_anchor", doc.buildingAnchor)
-        if (doc.seed.isNotEmpty()) spec.put("seed", doc.seed)   // SEED_GEN
         return spec
     }
 
@@ -195,7 +194,6 @@ object SpecCodec {
             spawn = ptOrNull("spawn_point"),
             raft = ptOrNull("raft_point"),
             buildingAnchor = spec.optString("building_anchor", "center").let { if (it == "topleft") it else "center" },
-            seed = spec.optString("seed", ""),   // SEED_GEN
         )
     }
 

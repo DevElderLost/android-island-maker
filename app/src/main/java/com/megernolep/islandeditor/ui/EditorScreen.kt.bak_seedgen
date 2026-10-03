@@ -170,7 +170,6 @@ private fun Header(vm: EditorViewModel) {
                         { vm.requestTypeChange(it) }, Modifier.weight(.55f),
                     )
                 }
-                if (d.seed.isNotEmpty()) Note("Seed: ${d.seed}")   // SEED_GEN
             }
         }
     }

@@ -48,7 +48,6 @@ data class Doc(
     val spawn: Pt? = null,
     val raft: Pt? = null,
     val buildingAnchor: String = "center",      // "center" | "topleft"
-    val seed: String = "",                      // SEED_GEN: kode seed pembuat pulau (kosong = dibuat manual)
 ) {
     fun deepCopy(): Doc = copy(biomes = biomes.copyOf())
     fun code(x: Int, y: Int): Int = biomes[y * W + x].toInt() and 0x3F

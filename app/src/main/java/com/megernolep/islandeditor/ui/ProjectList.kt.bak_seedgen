@@ -210,37 +210,6 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
         return f
     }
 
-    // SEED_GEN: proyek baru dari kode seed. Jalan di thread IO; hasil lewat callback (thread utama).
-    fun createSeededProject(
-        rawId: String, type: String, level: Int, seedText: String, size: Int, populate: Boolean,
-        onDone: (File) -> Unit, onError: (String) -> Unit,
-    ) {
-        val ctx = getApplication<Application>()
-        viewModelScope.launch {
-            try {
-                val f = withContext(Dispatchers.IO) {
-                    val id = AppSettings.sanitizeId(rawId)
-                    require(id.isNotEmpty()) { "ID tidak boleh kosong (huruf, angka, _ - .)." }
-                    val dir = AppSettings.projectDir(ctx)
-                    dir.mkdirs()
-                    require(dir.isDirectory) { "Folder proyek tidak bisa diakses. Cek pengaturan penyimpanan." }
-                    val file = File(dir, "$id.spec.json")
-                    require(!file.exists()) { "ID \"$id\" sudah dipakai proyek lain." }
-                    val res = SeedGen.generate(
-                        SeedGen.Options(seedText, type, level, id, size, populate, AppSettings.serverDir(ctx)), catalog,
-                    )
-                    AppSettings.writeAtomic(file, SpecCodec.encode(res.doc, catalog).toString().toByteArray(Charsets.UTF_8))
-                    file
-                }
-                onDone(f)
-            } catch (e: IllegalArgumentException) {
-                onError(e.message ?: "Gagal")
-            } catch (e: Exception) {
-                onError("Gagal membuat proyek: ${e.message}")
-            }
-        }
-    }
-
     /** Impor terrain zip pulau -> proyek .spec.json BARU di folder proyek (ID bentrok diberi akhiran _2, _3, ...). */
     fun importZip(uri: Uri) {
         if (importing) return
@@ -414,23 +383,17 @@ private fun ProjectCard(item: ProjectItem, sub: String, onClick: () -> Unit, onL
     }
 }
 
-// SEED_GEN: dialog proyek baru + opsi "kode seed"
 @Composable
 private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, onCreated: (File) -> Unit) {
     var id by remember { mutableStateOf(vm.suggestId()) }
     var type by remember { mutableStateOf("temperate_forest") }
     var level by remember { mutableStateOf("20") }
     var error by remember { mutableStateOf("") }
-    var useSeed by remember { mutableStateOf(false) }
-    var seed by remember { mutableStateOf("") }
-    var size by remember { mutableStateOf(1) }
-    var populate by remember { mutableStateOf(true) }
-    var busy by remember { mutableStateOf(false) }
     AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() }, containerColor = SurfHi,
+        onDismissRequest = onDismiss, containerColor = SurfHi,
         title = { Text("Proyek pulau baru") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Field(id, { id = it.filter { c -> !c.isWhitespace() } }, "ID pulau (template_id)")
                 Dropdown(
                     vm.catalog.types[type]?.label ?: type,
@@ -438,38 +401,21 @@ private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, on
                     { type = it },
                 )
                 Field(level, { level = it.filter { c -> c.isDigit() }.take(2) }, "Level", number = true)
-                CheckRow("Buat dari kode seed (seperti Minecraft)", useSeed) { useSeed = it }
-                if (useSeed) {
-                    Field(seed, { seed = it.take(40) }, "Kode seed (kosong = acak)")
-                    Chips(SeedGen.SIZE_LABELS.mapIndexed { i, l -> i to l }, size) { size = it }
-                    CheckRow("Isi natural, landmark & herd", populate) { populate = it }
-                    Note("Seed + tipe + ukuran yang sama menghasilkan bentuk pulau yang sama. Isi pulau mengikuti terrain asli di folder data server (bila sudah diatur), kalau tidak memakai katalog bawaan editor.")
-                }
                 Note(error, Danger)
             }
         },
         confirmButton = {
-            TextButton(enabled = !busy, onClick = {
-                val lv = (level.toIntOrNull() ?: 20).coerceIn(1, 99)
-                if (useSeed) {
-                    busy = true; error = ""
-                    vm.createSeededProject(
-                        id, type, lv, seed, size, populate,
-                        onDone = { busy = false; onCreated(it) },
-                        onError = { busy = false; error = it },
-                    )
-                } else {
-                    try {
-                        onCreated(vm.createProject(id, type, lv))
-                    } catch (e: IllegalArgumentException) {
-                        error = e.message ?: "Gagal"
-                    } catch (e: Exception) {
-                        error = "Gagal membuat proyek: ${e.message}"
-                    }
+            TextButton(onClick = {
+                try {
+                    onCreated(vm.createProject(id, type, (level.toIntOrNull() ?: 20).coerceIn(1, 99)))
+                } catch (e: IllegalArgumentException) {
+                    error = e.message ?: "Gagal"
+                } catch (e: Exception) {
+                    error = "Gagal membuat proyek: ${e.message}"
                 }
-            }) { Text(if (busy) "Membuat\u2026" else "Buat", color = Accent) }
+            }) { Text("Buat", color = Accent) }
         },
-        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Batal", color = TextHi) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal", color = TextHi) } },
     )
 }
 
