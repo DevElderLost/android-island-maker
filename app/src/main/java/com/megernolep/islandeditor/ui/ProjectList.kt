@@ -1,5 +1,31 @@
 package com.megernolep.islandeditor.ui
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
+import java.io.IOException
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BeachAccess
 import androidx.compose.material.icons.filled.Warning
@@ -80,6 +106,9 @@ data class ProjectItem(
     val broken: Boolean = false,
 )
 
+/** Hasil impor zip: proyek baru + ringkasan + peringatan untuk dialog. */
+data class ImportResult(val file: File, val id: String, val details: List<String>, val warnings: List<String>)
+
 /** Ikon proyek: gambar polos biome saja (tanpa bangunan / hewan / objek), di-cache supaya daftar cepat. */
 object ProjectThumbs {
     class Meta(val templateId: String, val type: String, val level: Int, val bitmap: Bitmap)
@@ -129,6 +158,9 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
     var loading by mutableStateOf(false)
         private set
     var toast by mutableStateOf<String?>(null)
+    var importing by mutableStateOf(false)
+        private set
+    var importResult by mutableStateOf<ImportResult?>(null)
     private var job: Job? = null
 
     fun refresh() {
@@ -178,6 +210,44 @@ class ProjectListViewModel(app: Application) : AndroidViewModel(app) {
         return f
     }
 
+    /** Impor terrain zip pulau -> proyek .spec.json BARU di folder proyek (ID bentrok diberi akhiran _2, _3, ...). */
+    fun importZip(uri: Uri) {
+        if (importing) return
+        val ctx = getApplication<Application>()
+        importing = true
+        viewModelScope.launch {
+            try {
+                val res = withContext(Dispatchers.IO) {
+                    val zipName = ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "pulau.zip"
+                    val r = ctx.contentResolver.openInputStream(uri)?.use { IslandReader.readZip(it, zipName, catalog) }
+                        ?: throw IOException("Tidak bisa membuka file")
+                    val dir = AppSettings.projectDir(ctx)
+                    dir.mkdirs()
+                    require(dir.isDirectory) { "Folder proyek tidak bisa diakses. Cek pengaturan penyimpanan." }
+                    val base = AppSettings.sanitizeId(r.suggestedId).ifEmpty { "pulau_import" }
+                    var id = base
+                    var n = 2
+                    while (File(dir, "$id.spec.json").exists()) { id = "${base}_$n"; n++ }
+                    r.spec.put("template_id", id)
+                    val doc = SpecCodec.decode(r.spec, catalog)
+                    val f = File(dir, "$id.spec.json")
+                    AppSettings.writeAtomic(f, SpecCodec.encode(doc, catalog).toString().toByteArray(Charsets.UTF_8))
+                    val extra = if (id != base) listOf("ID \"$base\" sudah dipakai proyek lain, disimpan sebagai \"$id\".") else emptyList()
+                    ImportResult(f, id, r.details, extra + r.warnings)
+                }
+                importResult = res
+                refresh()
+            } catch (e: IllegalArgumentException) {
+                toast = "Gagal impor: ${e.message}"
+            } catch (e: Exception) {
+                toast = "Gagal impor zip: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                importing = false
+            }
+        }
+    }
+
     fun delete(item: ProjectItem) {
         val ctx = getApplication<Application>()
         item.file.delete()
@@ -192,6 +262,10 @@ fun ProjectListScreen(vm: ProjectListViewModel, onOpen: (File) -> Unit, onSettin
     val ctx = LocalContext.current
     var showNew by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<ProjectItem?>(null) }
+    var fabOpen by remember { mutableStateOf(false) }
+    val zipPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importZip(uri)
+    }
     val fmt = remember { SimpleDateFormat("d MMM yyyy HH:mm", Locale("id")) }
 
     LaunchedEffect(vm.toast) {
@@ -226,23 +300,48 @@ fun ProjectListScreen(vm: ProjectListViewModel, onOpen: (File) -> Unit, onSettin
             }
         }
 
-        // tombol float "+" kanan bawah
-        Box(
-            Modifier.align(Alignment.BottomEnd).padding(20.dp).size(62.dp)
-                .shadow(8.dp, CircleShape).clip(CircleShape).background(Accent)
-                .clickable { showNew = true },
-            contentAlignment = Alignment.Center,
-        ) {
-            Canvas(Modifier.size(26.dp)) {
-                val w = 3.dp.toPx()
-                drawLine(Bg, Offset(size.width * .1f, size.height / 2), Offset(size.width * .9f, size.height / 2), strokeWidth = w, cap = StrokeCap.Round)
-                drawLine(Bg, Offset(size.width / 2, size.height * .1f), Offset(size.width / 2, size.height * .9f), strokeWidth = w, cap = StrokeCap.Round)
-            }
+        // tombol float "+" kanan bawah = speed-dial: berputar jadi ×, lalu [Impor zip] & [Proyek baru] naik dari bawah
+        AnimatedVisibility(fabOpen, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = .5f)).clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null,
+                ) { fabOpen = false },
+            )
         }
+        if (vm.importing) {
+            LinearProgressIndicator(Modifier.align(Alignment.TopCenter).fillMaxWidth(), color = Accent, trackColor = SurfHi)
+        }
+        SpeedDial(
+            open = fabOpen,
+            onToggle = { fabOpen = !fabOpen },
+            onNew = { fabOpen = false; showNew = true },
+            onImportZip = {
+                fabOpen = false
+                zipPicker.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/x-zip", "application/octet-stream"))
+            },
+            modifier = Modifier.align(Alignment.BottomEnd),
+        )
+        BackHandler(enabled = fabOpen) { fabOpen = false }
     }
 
     if (showNew) {
         NewProjectDialog(vm, onDismiss = { showNew = false }, onCreated = { showNew = false; onOpen(it) })
+    }
+
+    vm.importResult?.let { r ->
+        AlertDialog(
+            onDismissRequest = { vm.importResult = null }, containerColor = SurfHi,
+            title = { IconLabel(Icons.Filled.CheckCircle, "Impor berhasil", tint = Accent, fontSize = 18.sp, iconSize = 22.dp) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text(r.id, color = Accent, fontSize = 15.sp)
+                    r.details.forEach { Note(it) }
+                    r.warnings.forEach { Note("[!] $it", Warn) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.importResult = null; onOpen(r.file) }) { Text("Buka proyek", color = Accent) } },
+            dismissButton = { TextButton(onClick = { vm.importResult = null }) { Text("Tutup", color = TextHi) } },
+        )
     }
 
     toDelete?.let { p ->
@@ -318,4 +417,49 @@ private fun NewProjectDialog(vm: ProjectListViewModel, onDismiss: () -> Unit, on
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Batal", color = TextHi) } },
     )
+}
+
+/** Tombol "+" yang berputar jadi ×; dua tombol aksi meluncur dari bawah ke atas, ditumpuk di atasnya. */
+@Composable
+private fun SpeedDial(
+    open: Boolean, onToggle: () -> Unit, onNew: () -> Unit, onImportZip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val rot by animateFloatAsState(if (open) 135f else 0f, tween(320), label = "fabRotation")
+    Column(
+        modifier.padding(20.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        DialItem(open, 70, Icons.Filled.Unarchive, "Impor zip", onImportZip)   // paling atas, muncul belakangan
+        DialItem(open, 0, Icons.Filled.NoteAdd, "Proyek baru", onNew)          // tepat di atas tombol +
+        Box(
+            Modifier.size(62.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(Accent).clickable(onClick = onToggle),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Tambah", tint = Bg, modifier = Modifier.size(30.dp).rotate(rot))
+        }
+    }
+}
+
+@Composable
+private fun DialItem(open: Boolean, delayMs: Int, icon: ImageVector, label: String, onClick: () -> Unit) {
+    AnimatedVisibility(
+        visible = open,
+        enter = slideInVertically(tween(260, delayMillis = delayMs)) { it * 2 } + fadeIn(tween(200, delayMillis = delayMs)),
+        exit = slideOutVertically(tween(180)) { it * 2 } + fadeOut(tween(140)),
+    ) {
+        Row(Modifier.padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label, color = TextHi, fontSize = 13.sp,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Surf)
+                    .border(1.dp, Outline, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Box(
+                Modifier.size(50.dp).shadow(6.dp, CircleShape).clip(CircleShape).background(Accent2).clickable(onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) { Icon(icon, contentDescription = label, tint = Bg, modifier = Modifier.size(24.dp)) }
+        }
+    }
 }
