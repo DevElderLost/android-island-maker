@@ -125,20 +125,6 @@ object Ops {
         return true
     }
 
-    /**
-     * SPAWN_SEA: jarak Chebyshev (tile) dari titik ke tile darat terdekat (code < 11).
-     * 0 = titik itu sendiri darat. Hasil > maxR berarti tidak ada darat dalam radius maxR (atau pulau kosong).
-     */
-    fun landDistance(doc: Doc, x: Int, y: Int, maxR: Int = 48): Int {
-        if (doc.inside(x, y) && doc.code(x, y) < 11) return 0
-        fun land(tx: Int, ty: Int) = doc.inside(tx, ty) && doc.code(tx, ty) < 11
-        for (r in 1..maxR) {   // hanya tepi cincin radius r (dipanggil tiap frame kanvas)
-            for (dx in -r..r) if (land(x + dx, y - r) || land(x + dx, y + r)) return r
-            for (dy in -r + 1..r - 1) if (land(x - r, y + dy) || land(x + r, y + dy)) return r
-        }
-        return maxR + 1
-    }
-
     /** Titik darat 9x9 terdekat ke pusat daratan. Pair(titik, pesan error). */
     fun autoSpawn(doc: Doc): Pair<Pt?, String?> {
         var sx = 0.0; var sy = 0.0; var n = 0

@@ -208,8 +208,6 @@ object IslandBuilder {
         val m = LinkedHashMap<String, Any?>()
         // dibaca server (StarterIslands / NpcSpawner / AnimalManager) & client dari info.yml
         if (spawn != null) m["spawn_point"] = linkedMapOf<String, Any?>("x" to spawn.optInt("x"), "y" to spawn.optInt("y"))
-        // SPAWN_SEA: batas jarak spawn laut dari darat (tile). Dibaca server: StarterIslands.ResolveLayout. 0 = tidak ditulis
-        if (spawn != null && spec.optInt("spawn_max_land_distance", 0) > 0) m["spawn_max_land_distance"] = spec.optInt("spawn_max_land_distance", 0)
         if (raft != null) m["raft_point"] = linkedMapOf<String, Any?>("x" to raft.optInt("x"), "y" to raft.optInt("y"), "size" to raft.optInt("size", 4))
         spec.optJSONArray("npcs")?.let { if (it.length() > 0) m["npcs"] = it }
         val statics = spec.list("static_animals").filter { it.hasInt("x") && it.hasInt("y") && it.optInt("entityType", 0) != 0 }

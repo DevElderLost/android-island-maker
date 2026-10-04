@@ -800,12 +800,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------- thornbush, spawn, rakit, cek ----------------
     fun clearThorns() { if (doc.thorns.isNotEmpty()) edit { it.copy(thorns = emptySet()) } }
 
-    /** SPAWN_SEA: atur jarak maks spawn laut dari daratan (tile, 0 = bebas). */
-    fun setSpawnMaxLand(v: Int) {
-        doc = doc.copy(spawnMaxLand = v.coerceIn(0, 60))
-        mark(); rev++
-    }
-
     fun autoSpawn() {
         val (p, err) = Ops.autoSpawn(doc)
         if (p == null) { hint = err ?: ""; return }
@@ -996,15 +990,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             Mode.RAFT ->
                 if (x + 3 >= W || y + 3 >= H || Ops.raftCheck(doc, x, y).core > 0) changed = reject("[x] Ditolak: area 4x4 rakit harus di darat dan di dalam peta.")
                 else { hint = ""; doc = doc.copy(raft = Pt(x, y)) }
-            Mode.SPAWN -> {
-                // SPAWN_SEA: spawn boleh di darat MAUPUN di laut. Kalau batas jarak (spawnMaxLand) > 0,
-                // titik laut yang lebih jauh dari batas itu dari daratan ditolak.
-                val lim = doc.spawnMaxLand
-                val dist = Ops.landDistance(doc, x, y, if (lim > 0) lim else 48)
-                if (!doc.inside(x, y)) changed = reject("[x] Ditolak: titik di luar peta.")
-                else if (lim > 0 && dist > lim) changed = reject("[x] Ditolak: titik ini lebih dari $lim tile dari daratan (batas spawn laut). Geser lebih dekat ke pantai atau perbesar batasnya.")
+            Mode.SPAWN ->
+                if (!Ops.spawnAreaOk(doc, x, y)) changed = reject("[x] Ditolak: area 9x9 di sekitar titik ini kena air/tepi peta. Pilih tempat yang lebih ke dalam daratan.")
                 else { hint = ""; doc = doc.copy(spawn = Pt(x, y)) }
-            }
             Mode.HERD -> {
                 val c = doc.code(x, y)
                 val g = o.herdGroup
@@ -1040,11 +1028,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val d = Ops.diagnoseRivers(doc.biomes)
         if (d.isolated > 0 || d.fat > 0) warns.add("Sungai bermasalah:\n" + Ops.waterReportText(d))
         if (doc.spawn == null) warns.add("Belum ada titik spawn pemain (server akan mencari sendiri dari dermaga).")
-        doc.spawn?.let { s ->   // SPAWN_SEA
-            val lim = doc.spawnMaxLand
-            if (lim > 0 && Ops.landDistance(doc, s.x, s.y, lim) > lim)
-                warns.add("Spawn di laut lebih jauh dari batas $lim tile dari daratan (server akan menggesernya ke titik terdekat yang masih dalam batas).")
-        }
         if (doc.raft == null) warns.add("Belum ada titik rakit tutorial (server akan menghitung sendiri).")
         if (warns.isEmpty()) performExport(kind) else pendingExport = ExportPrompt(kind, warns)
     }

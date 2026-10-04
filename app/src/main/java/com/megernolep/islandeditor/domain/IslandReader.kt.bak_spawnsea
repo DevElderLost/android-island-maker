@@ -183,7 +183,6 @@ object IslandReader {
             .put("npcs", arr("npcs")).put("static_animals", arr("static_animals"))
             .put("tutorial_triggers", arr("tutorial_triggers")).put("thorn_bushes", arr("thorn_bushes"))
         info.optJSONObject("spawn_point")?.let { spec.put("spawn_point", it) }
-        if (info.optInt("spawn_max_land_distance", 0) > 0) spec.put("spawn_max_land_distance", info.optInt("spawn_max_land_distance", 0))   // SPAWN_SEA
         info.optJSONObject("raft_point")?.let { spec.put("raft_point", it) }
 
         val details = listOf(

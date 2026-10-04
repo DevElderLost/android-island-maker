@@ -179,27 +179,9 @@ private fun RailPanel(vm: EditorViewModel) {
 @Composable
 private fun SpawnPanel(vm: EditorViewModel) {
     val sp = vm.doc.spawn
-    // SPAWN_SEA: spawn boleh di darat atau di laut; batas jarak dari daratan bisa diatur
-    Note("Ketuk peta untuk menaruh titik spawn pemain. Boleh di darat atau di laut (pemain mulai berenang).")
+    Note("Ketuk peta untuk menaruh titik spawn pemain. Area 9×9 di sekelilingnya harus darat penuh.")
     OutlinedButton(onClick = { vm.autoSpawn() }) { Text("Otomatis (tengah daratan)") }
-    SizeSlider("Jarak maks spawn laut dari darat", vm.doc.spawnMaxLand, 0, 60, unit = "tile") { v -> vm.setSpawnMaxLand(v) }
-    Note(if (vm.doc.spawnMaxLand == 0) "0 = tanpa batas. Isi >0 supaya spawn di laut tidak terlalu jauh dari pantai (titik yang lebih jauh ditolak)." else "Spawn di laut harus dalam ${vm.doc.spawnMaxLand} tile dari daratan.")
-    if (sp == null) {
-        Note("Belum ada spawn.")
-    } else {
-        val dist = Ops.landDistance(vm.doc, sp.x, sp.y, 48)
-        val lim = vm.doc.spawnMaxLand
-        val sea = dist > 0
-        val tooFar = sea && lim > 0 && dist > lim
-        val narrow = !sea && !Ops.spawnAreaOk(vm.doc, sp.x, sp.y)
-        val msg = when {
-            tooFar -> "[x] laut, lebih dari $lim tile dari darat (server akan menggeser)"
-            sea -> "[ok] laut, ${if (dist > 48) "jauh (>48)" else "$dist"} tile dari darat"
-            narrow -> "[!] darat sempit (area 9x9 kena air/tepi), tetap dipakai"
-            else -> "[ok] darat, area aman"
-        }
-        Note("Spawn: ${sp.x}, ${sp.y} — $msg", if (tooFar || narrow) Warn else TextHi)
-    }
+    Note(if (sp == null) "Belum ada spawn." else "Spawn: ${sp.x}, ${sp.y} — " + if (Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) "[ok] area aman" else "[!] area kena air/tepi", if (sp != null && !Ops.spawnAreaOk(vm.doc, sp.x, sp.y)) Warn else TextHi)
 }
 
 @Composable

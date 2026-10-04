@@ -248,17 +248,8 @@ private fun DrawScope.drawOverlays(vm: EditorViewModel, doc: Doc, px: (Float) ->
         box(r.x, r.y, r.x + 3, r.y + 3, col.copy(alpha = .45f), col, false, px)
     }
     doc.spawn?.let { s ->
-        // SPAWN_SEA: hijau = darat aman, kuning = darat sempit, cyan = laut dalam batas, merah = laut melewati batas
-        val lim = doc.spawnMaxLand
-        val dist = Ops.landDistance(doc, s.x, s.y, if (lim > 0) lim else 48)
-        val sea = dist > 0
-        val ok = !sea && Ops.spawnAreaOk(doc, s.x, s.y)
-        val col = when {
-            sea && lim > 0 && dist > lim -> Color(0xFFFF3C3C)
-            sea -> Color(0xFF37D7FF)
-            ok -> Color(0xFF5CFF7A)
-            else -> Color(0xFFFFB020)
-        }
+        val ok = Ops.spawnAreaOk(doc, s.x, s.y)
+        val col = if (ok) Color(0xFF5CFF7A) else Color(0xFFFFB020)
         box(s.x - 4, s.y - 4, s.x + 4, s.y + 4, null, col, true, px)
         dot(s.x, s.y, col, 3f, true, px)
         drawCircle(Color.Black, px(2f), Offset(mx(s.x), my(s.y)))

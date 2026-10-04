@@ -46,7 +46,6 @@ data class Doc(
     val thorns: Set<Int> = emptySet(),          // indeks y*W+x
     val trig: List<TrigZone> = emptyList(),
     val spawn: Pt? = null,
-    val spawnMaxLand: Int = 0,                  // SPAWN_SEA: jarak maks spawn LAUT dari daratan (tile), 0 = bebas
     val raft: Pt? = null,
     val buildingAnchor: String = "center",      // "center" | "topleft"
     val seed: String = "",                      // SEED_GEN: kode seed pembuat pulau (kosong = dibuat manual)

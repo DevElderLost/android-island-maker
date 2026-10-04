@@ -46,7 +46,6 @@ object SpecCodec {
         spec.put("landmark_prefabs", JSONArray(prefabs))
         spec.put("port_points", JSONArray(doc.ports.map { pt(it.x, it.y) }))
         spec.put("spawn_point", doc.spawn?.let { pt(it.x, it.y) } ?: JSONObject.NULL)
-        spec.put("spawn_max_land_distance", doc.spawnMaxLand)   // SPAWN_SEA
         spec.put("raft_point", doc.raft?.let { pt(it.x, it.y).put("size", 4) } ?: JSONObject.NULL)
         val entry = doc.spawn?.let { listOf(it) } ?: doc.ports
         spec.put("entry_points", JSONArray(entry.map { JSONArray(listOf(it.x, it.y)) }))
@@ -194,7 +193,6 @@ object SpecCodec {
             thorns = thorns,
             trig = decodeTriggers(spec.optJSONArray("tutorial_triggers")),
             spawn = ptOrNull("spawn_point"),
-            spawnMaxLand = spec.optInt("spawn_max_land_distance", 0).coerceAtLeast(0),   // SPAWN_SEA
             raft = ptOrNull("raft_point"),
             buildingAnchor = spec.optString("building_anchor", "center").let { if (it == "topleft") it else "center" },
             seed = spec.optString("seed", ""),   // SEED_GEN
