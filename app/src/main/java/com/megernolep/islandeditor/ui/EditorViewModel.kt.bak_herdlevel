@@ -545,11 +545,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- metadata pulau ----------------
     fun setTemplateId(v: String) { doc = doc.copy(templateId = v) }
-    fun setLevel(v: Int) {
-        // HERDLEVEL: semua herd ikut level pulau
-        doc = doc.copy(level = v, herds = doc.herds.map { it.copy(level = v) })
-        opts = opts.copy(herdLevel = v)
-    }
+    fun setLevel(v: Int) { doc = doc.copy(level = v) }
     fun setRole(v: Int) { doc = doc.copy(role = v) }
     fun setBuildingAnchor(v: String) { doc = doc.copy(buildingAnchor = v) }
 
@@ -701,19 +697,19 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         opts = o
         val items = herdItems()
         if (items.isNotEmpty() && items.none { it.animal.id == opts.selAnimal }) {
-            opts = opts.copy(selAnimal = items[0].animal.id, herdLevel = doc.level.coerceAtLeast(1))
+            opts = opts.copy(selAnimal = items[0].animal.id, herdLevel = items[0].level)
         }
         syncHerdLevel()
     }
 
     fun syncHerdLevel() {
-        // HERDLEVEL: level herd dikunci ke level pulau (bukan level template hewan)
-        val lv = doc.level.coerceAtLeast(1)
+        val a = catalog.animals[opts.selAnimal] ?: return
+        val lv = (if (opts.herdLevel == 0) a.lvMin else opts.herdLevel).coerceIn(a.lvMin, a.lvMax)
         if (lv != opts.herdLevel) opts = opts.copy(herdLevel = lv)
     }
 
     fun pickAnimal(item: HerdItem) {
-        opts = opts.copy(selAnimal = item.animal.id, herdLevel = doc.level.coerceAtLeast(1))
+        opts = opts.copy(selAnimal = item.animal.id, herdLevel = if (item.level != 0) item.level else item.animal.lvMin)
         syncHerdLevel()
     }
 
@@ -1016,7 +1012,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     changed = reject("Titik ditolak: grup \"$g\" harus di tile ${EditorData.groupTileName[g]}, tile ini \"${Biomes.short[c] ?: c}\".")
                 } else {
                     hint = ""; syncHerdLevel()
-                    doc = doc.copy(herds = doc.herds + Herd(g, x, y, opts.selAnimal, doc.level.coerceAtLeast(1)))
+                    doc = doc.copy(herds = doc.herds + Herd(g, x, y, opts.selAnimal, opts.herdLevel))
                 }
             }
             Mode.BUILDING -> {

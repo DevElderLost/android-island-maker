@@ -291,9 +291,6 @@ object IslandBuilder {
             var et = h.optInt("entityType", 0); var lv = h.optInt("level", 0)
             if (et >= 10000) { lv = et % 100; et /= 100 }
             if (et <= 0) continue
-            // HERDLEVEL: level herd selalu = level pulau (pulau lv5 -> herd lv5)
-            val islandLv = spec.optInt("level", 0)
-            if (islandLv > 0) lv = islandLv
             out.add(linkedMapOf<String, Any?>("group" to h.optString("group", "land"), "x" to h.getInt("x"), "y" to h.getInt("y"), "entityType" to et, "level" to lv))
         }
         return if (out.isEmpty()) null else out

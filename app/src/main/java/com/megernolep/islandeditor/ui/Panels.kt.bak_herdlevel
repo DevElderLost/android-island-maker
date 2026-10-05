@@ -245,11 +245,8 @@ private fun HerdPanel(vm: EditorViewModel) {
     )
     val a = vm.catalog.animals[o.selAnimal]
     if (a != null) {
-        Section("Level herd = level pulau (${vm.doc.level})")
-        Note("Semua herd otomatis berlevel ${vm.doc.level}, mengikuti level pulau. Ubah level pulau di pengaturan pulau.")
-        if (vm.doc.level < a.lvMin || vm.doc.level > a.lvMax) {
-            Note("Hewan ini hanya valid di lv${a.lvMin}–${a.lvMax}; server akan menyesuaikan ke batas terdekat.")
-        }
+        Section("Level (${a.lvMin}–${a.lvMax})")
+        Stepper(o.herdLevel, a.lvMin, a.lvMax) { v -> vm.setOpts { it.copy(herdLevel = v) } }
         Note("Titik harus di tile yang sesuai grup (mis. 'land' di darat). Satu ketukan = satu titik kawanan.")
     }
 }
