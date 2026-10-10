@@ -1,0 +1,222 @@
+{
+"9113": {
+"n": "camp_kiln_02",
+"min": 1,
+"max": 66
+},
+"9104": {
+"n": "camp_square_fire",
+"min": 1,
+"max": 80
+},
+"9105": {
+"n": "camp_fur_table_01",
+"min": 1,
+"max": 70
+},
+"9202": {
+"n": "camp_training_target",
+"min": 1,
+"max": 80
+},
+"9200": {
+"n": "camp_hot_air_balloon",
+"min": 1,
+"max": 80
+},
+"9201": {
+"n": "camp_bike",
+"min": 1,
+"max": 80
+},
+"9107": {
+"n": "camp_kitchen_01",
+"min": 1,
+"max": 66
+},
+"9111": {
+"n": "camp_dryingrack_02",
+"min": 1,
+"max": 66
+},
+"9109": {
+"n": "camp_loom_02",
+"min": 1,
+"max": 66
+},
+"9106": {
+"n": "camp_furnace_01",
+"min": 1,
+"max": 38
+},
+"9112": {
+"n": "camp_kiln_01",
+"min": 1,
+"max": 44
+},
+"9114": {
+"n": "camp_punch_machine",
+"min": 1,
+"max": 80
+},
+"9205": {
+"n": "camp_boxingbag",
+"min": 1,
+"max": 80
+},
+"9203": {
+"n": "camp_training_dummy",
+"min": 1,
+"max": 80
+},
+"9110": {
+"n": "camp_dryingrack_01",
+"min": 1,
+"max": 38
+},
+"9108": {
+"n": "camp_loom_01",
+"min": 1,
+"max": 40
+},
+"9204": {
+"n": "camp_training_set",
+"min": 1,
+"max": 80
+},
+"6347": {
+"n": "camp_board_neglected",
+"min": 1,
+"max": 60
+},
+"6042": {
+"n": "camp_board_seol",
+"min": 1,
+"max": 80
+},
+"6302": {
+"n": "camp_board_volcanic",
+"min": 1,
+"max": 80
+},
+"9102": {
+"n": "camp_board",
+"min": 1,
+"max": 80
+},
+"9117": {
+"n": "camp_board_be_building",
+"min": 1,
+"max": 80
+},
+"6348": {
+"n": "camp_warehouse_neglected",
+"min": 1,
+"max": 60
+},
+"6344": {
+"n": "camp_warehouse_be_building_sunset",
+"min": 1,
+"max": 60
+},
+"6041": {
+"n": "camp_warehouse_seol",
+"min": 1,
+"max": 80
+},
+"6303": {
+"n": "camp_warehouse_volcacnic",
+"min": 1,
+"max": 80
+},
+"6353": {
+"n": "camp_warehouse_02",
+"min": 1,
+"max": 60
+},
+"9103": {
+"n": "camp_warehouse",
+"min": 1,
+"max": 80
+},
+"9116": {
+"n": "camp_warehouse_be_building",
+"min": 1,
+"max": 80
+},
+"6343": {
+"n": "camp_radio_station_be_building_sunset",
+"min": 1,
+"max": 60
+},
+"6040": {
+"n": "camp_radio_station_seol",
+"min": 1,
+"max": 80
+},
+"6301": {
+"n": "camp_radio_station_volcanic",
+"min": 1,
+"max": 80
+},
+"6352": {
+"n": "camp_radio_station_02",
+"min": 1,
+"max": 60
+},
+"9100": {
+"n": "camp_radio_station",
+"min": 1,
+"max": 80
+},
+"9115": {
+"n": "camp_radio_station_be_building",
+"min": 1,
+"max": 80
+},
+"6346": {
+"n": "camp_radio_station_neglected",
+"min": 1,
+"max": 60
+},
+"9440": {
+"n": "cargo_warphole_in",
+"min": 1,
+"max": 60
+},
+"9442": {
+"n": "cargo_warphole_out2",
+"min": 1,
+"max": 60
+},
+"9443": {
+"n": "cargo_warphole_out3",
+"min": 1,
+"max": 60
+},
+"9450": {
+"n": "neutral_warphole",
+"min": 1,
+"max": 80
+},
+"9444": {
+"n": "cargo_warphole_out4",
+"min": 1,
+"max": 60
+},
+"9441": {
+"n": "cargo_warphole_out",
+"min": 1,
+"max": 60
+},
+"6342": {
+"n": "warp_sailo",
+"min": 1,
+"max": 60
+},
+"9101": {
+"n": "camp_warphole",
+"min": 1,
+"max": 80
+}
+}

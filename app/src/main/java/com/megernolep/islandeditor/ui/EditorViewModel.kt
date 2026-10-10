@@ -682,7 +682,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val q = opts.herdSearch.trim().lowercase()
         return catalog.speciesFor(doc.islandType, opts.herdGroup, opts.herdAll)
             .mapNotNull { r -> catalog.animals[r.id]?.let { HerdItem(it, r.level, r.count) } }
-            .filter { (opts.herdDiet == "*" || it.animal.diet == opts.herdDiet) && (q.isEmpty() || matchQ(it.animal.name + " " + it.animal.id, q)) }
+            .filter { (opts.herdDiet == "*" || it.animal.diet == opts.herdDiet) && (q.isEmpty() || matchQ(it.animal.name + " " + it.animal.id + " " + ItemInfo.animalSearch(it.animal), q)) }
     }
 
     fun herdDiets(): List<Pair<String, Int>> {
@@ -724,7 +724,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val q = opts.decSearch.trim().lowercase()
         val pin = EditorData.decorPin
         return catalog.animals.values
-            .filter { q.isEmpty() || matchQ(decorName(it) + " " + it.id, q) }
+            .filter { q.isEmpty() || matchQ(decorName(it) + " " + it.id + " " + ItemInfo.animalSearch(it), q) }
             .sortedWith { a, b ->
                 val pa = pin.indexOf(a.id); val pb = pin.indexOf(b.id)
                 if (pa >= 0 || pb >= 0) (if (pa < 0) 99 else pa) - (if (pb < 0) 99 else pb)
@@ -785,7 +785,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- bangunan ----------------
     val bldCats: List<String> by lazy { catalog.buildings.map { it.cat }.distinct() }
-    fun bldItems(): List<BldItem> = catalog.buildings.filter { opts.bldCat == "*" || it.cat == opts.bldCat }
+    fun bldItems(): List<BldItem> = catalog.buildings.filter { opts.bldCat == "*" || it.cat == opts.bldCat }.sortedWith(compareBy({ it.name }, { it.id }))
 
     // ---------------- zona pemicu ----------------
     fun trigCurFlow(): String {

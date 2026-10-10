@@ -12,6 +12,8 @@ class Catalog(
     val animals: Map<Int, AnimalItem>,
     val types: Map<String, TypePreset>,
     val species: Map<String, Map<String, List<SpeciesRow>>>,
+    /** ITEM_INFO: nama internal + rentang level per id bangunan (opsional, assets/building_info.json). */
+    val bldExtra: Map<Int, BldExtra> = emptyMap(),
 ) {
     val natById: Map<Int, NatItem> = naturals.associateBy { it.id }
     val bldById: Map<Int, BldItem> = buildings.associateBy { it.id }
@@ -82,7 +84,15 @@ class Catalog(
                 }
                 species[t] = groups
             }
-            return Catalog(nats, lms, blds, animals, types, species)
+            val bldExtra = LinkedHashMap<Int, BldExtra>()
+            try {
+                val bj = JSONObject(readAsset(ctx, "building_info.json"))
+                for (k in bj.keys()) {
+                    val o = bj.getJSONObject(k)
+                    k.toIntOrNull()?.let { bldExtra[it] = BldExtra(o.getString("n"), o.getInt("min"), o.getInt("max")) }
+                }
+            } catch (e: Exception) { /* file opsional */ }
+            return Catalog(nats, lms, blds, animals, types, species, bldExtra)
         }
 
         private fun readAsset(ctx: Context, name: String): String =

@@ -240,11 +240,12 @@ private fun HerdPanel(vm: EditorViewModel) {
     PickList(
         vm.herdItems(), { it.animal.id }, o.selAnimal,
         { Color(EditorData.dietColor[it.animal.diet] ?: 0xFFFFFFFF.toInt()) },
-        { it.animal.name }, { if (it.count > 0) "lv${it.level} ×${it.count}" else "#${it.animal.id}" },
+        { ItemInfo.animalLabel(it.animal) }, { ItemInfo.animalSub(it.animal) },
         { vm.pickAnimal(it) },
     )
     val a = vm.catalog.animals[o.selAnimal]
     if (a != null) {
+        AnimalInfoCard(vm, a, vm.herdItems().firstOrNull { it.animal.id == a.id })
         Section("Level herd = level pulau (${vm.doc.level})")
         Note("Semua herd otomatis berlevel ${vm.doc.level}, mengikuti level pulau. Ubah level pulau di pengaturan pulau.")
         if (vm.doc.level < a.lvMin || vm.doc.level > a.lvMax) {
@@ -262,8 +263,9 @@ private fun DecorPanel(vm: EditorViewModel) {
     Field(o.decSearch, { v -> vm.setOpts { it.copy(decSearch = v) } }, "Cari hewan…", Modifier.padding(vertical = 6.dp))
     PickList(
         vm.decorItems(), { it.id }, o.selDecor, { Color(EditorData.dietColor[it.diet] ?: 0xFFFFFFFF.toInt()) },
-        { vm.decorName(it) }, { "#${it.id}" }, { a -> vm.setOpts { it.copy(selDecor = a.id) } },
+        { ItemInfo.animalLabel(it, vm.decorName(it)) }, { ItemInfo.animalSub(it) }, { a -> vm.setOpts { it.copy(selDecor = a.id) } },
     )
+    vm.catalog.animals[o.selDecor]?.let { AnimalInfoCard(vm, it, null) }
     Note("Setelah ditaruh, objek terpilih (kotak putus-putus). Tekan LAMA ikon rotasi di pojok kotak lalu geser untuk memutar. Ketuk objek yang sudah ada untuk memilihnya lagi.", Accent2)  // rot-help-decor
 }
 
@@ -362,14 +364,80 @@ private fun BuildingPanel(vm: EditorViewModel) {
     )
     Box(Modifier.padding(top = 6.dp)) {
         PickList(
-            vm.bldItems(), { it.id }, o.selBuilding, { Color(0xFFFFA030) }, { it.name }, { "${it.w}×${it.h}" },
+            vm.bldItems(), { it.id }, o.selBuilding, { Color(0xFFFFA030) }, { ItemInfo.bldLabel(vm.catalog, it) }, { ItemInfo.bldSub(vm.catalog, it) },
             { b -> vm.setOpts { it.copy(selBuilding = b.id) } },
         )
     }
+    vm.catalog.bldById[o.selBuilding]?.let { BuildingInfoCard(vm, it) }
     Section("Titik jangkar")
     Chips(listOf("center" to "Tengah", "topleft" to "Kiri-bawah"), vm.doc.buildingAnchor) { vm.setBuildingAnchor(it) }
     Note(vm.hint, Warn)
     Note("Ketuk untuk menaruh. Kotak oranye = jejak bangunan; merah = bermasalah.")
+    PlacedBuildingList(vm)
+}
+
+// ---- ITEM_INFO: kartu info supaya tidak salah pilih level / jenis ----
+@Composable
+private fun AnimalInfoCard(vm: EditorViewModel, a: AnimalItem, row: HerdItem?) {
+    val tags = ItemInfo.animalTags(a)
+    SelBox {
+        Text(ItemInfo.animalLabel(a), fontSize = 13.sp)
+        Note("ID #${a.id} \u00b7 internal: ${a.internal}")
+        Note("Rentang level valid: ${ItemInfo.levelText(a)} \u00b7 jenis: ${EditorData.dietLabel[a.diet] ?: a.diet}")
+        Note("Kategori: " + if (tags.isEmpty()) "hewan biasa" else tags.joinToString(" / "))
+        if (row != null && row.count > 0) Note("Template asli: lv${row.level} \u00d7${row.count}")
+        if (ItemInfo.isEvent(a)) Note("[!] Ini hewan EVENT/musiman, bukan hewan biasa. Cek lagi sebelum menaruh.", Warn)
+        val dup = ItemInfo.sameName(vm.catalog, a)
+        if (dup.isNotEmpty()) {
+            Note("[!] ${dup.size} hewan lain bernama sama \"${a.name}\":", Warn)
+            for (d in dup.take(8)) {
+                Note("#${d.id} \u00b7 ${ItemInfo.levelText(d)} \u00b7 " + ItemInfo.animalTags(d).ifEmpty { listOf("biasa") }.joinToString("/") + " \u00b7 ${d.internal}")
+            }
+            if (dup.size > 8) Note("\u2026 dan ${dup.size - 8} lainnya")
+        }
+    }
+}
+
+@Composable
+private fun BuildingInfoCard(vm: EditorViewModel, b: BldItem) {
+    val cat = vm.catalog
+    val ex = cat.bldExtra[b.id]
+    val rng = ItemInfo.bldRange(cat, b.id)
+    SelBox {
+        Text(b.name, fontSize = 13.sp)
+        Note("ID #${b.id} \u00b7 ${b.w}\u00d7${b.h} tile \u00b7 ${b.cat}")
+        if (ex != null) {
+            Note("Varian: ${ItemInfo.bldTheme(cat, b.id)} \u00b7 internal: ${ex.internal}")
+            Note("Rentang level bangunan: $rng (level pulau ini: ${vm.doc.level})", TextHi)
+            if (ItemInfo.bldOutOfRange(cat, b.id, vm.doc.level)) Note("[!] Level pulau ${vm.doc.level} di luar rentang bangunan ini ($rng).", Warn)
+            Note("Catatan: data game tidak punya tingkatan level terpisah per bangunan; yang membedakan id bernama sama adalah varian model dan rentang level blueprint.")
+        } else {
+            Note("Data level bangunan ini tidak ada di assets/building_info.json.", Warn)
+        }
+        val dup = ItemInfo.bldSameName(cat, b)
+        if (dup.isNotEmpty()) {
+            Note("[!] Nama ini dipakai ${dup.size + 1} bangunan berbeda. Yang lain:", Warn)
+            for (d in dup) Note("#${d.id} \u00b7 ${ItemInfo.bldTheme(cat, d.id) ?: "?"} \u00b7 ${ItemInfo.bldRange(cat, d.id) ?: "?"}")
+        }
+    }
+}
+
+@Composable
+private fun PlacedBuildingList(vm: EditorViewModel) {
+    val list = vm.doc.buildings
+    Section("Bangunan terpasang (${list.size})")
+    if (list.isEmpty()) { Note("Belum ada bangunan."); return }
+    for (b in list.takeLast(12).reversed()) {
+        val info = vm.catalog.bldById[b.entityType]
+        val bad = info == null || ItemInfo.bldOutOfRange(vm.catalog, b.entityType, vm.doc.level)
+        Note(
+            (if (info != null) ItemInfo.bldLabel(vm.catalog, info) else "tipe tidak dikenal") + " \u00b7 #${b.entityType}" +
+                (ItemInfo.bldRange(vm.catalog, b.entityType)?.let { " \u00b7 $it" } ?: "") + " \u00b7 (${b.x}, ${b.y})" +
+                (if (bad && info != null) " [!]" else ""),
+            if (bad) Warn else TextHi,
+        )
+    }
+    if (list.size > 12) Note("\u2026 ${list.size - 12} bangunan lebih lama tidak ditampilkan")
 }
 
 // ---------------------------------------------------------------- ZONA PEMICU
